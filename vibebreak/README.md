@@ -130,7 +130,10 @@ A 3×3 grid laid out like your keyboard's left hand: **Q W E / A S D / Z X C** (
 Steer with **arrows, WASD or HJKL**. Eat `<>` to grow. Bonus `$$` food appears now and then and fades after 5 seconds. Boards are generated at random as *open*, *pillars*, *walls* or *cross*, and every layout is checked with a flood fill so the whole board is reachable. Speed increases with each bite. Turn presses are buffered (up to 2) and reversals are ignored, so a fast double-tap does what you meant.
 
 ### Ski Survival: downhill survival (60s, or endless)
-Race down an endless, procedurally generated mountain. The slope scrolls toward your skier `S`. Dodge trees `T`, rocks `O` and snowmen `8`. Moguls `~` slow you down. Jump over rocks and crevasses `X`, hit ramps `^` for big air, and collect ski tokens `*`, gold `$` and hot cocoa `+` (an extra life).
+Race down an endless, procedurally generated mountain drawn in multi-line ASCII art. The slope scrolls toward your skier, who leans into turns, crouches to tuck, snowploughs to brake and spins or grabs in big air. Dodge snow-covered pines, spruces, evergreens and windblown trees, rocks and snowmen. Moguls `_/^\_` slow you down. Jump over rocks and crevasses `\VVVV/`, hit ramps `.^^^.` for big air, and collect ski tokens `(*)`, gold `[$]` and hot cocoa `[_]D` (an extra life). Snow falls, gusts of wind sway the trees, and the forest lines the slope.
+
+- **Fair collisions:** only the solid part of each sprite can hit you: a tree's trunk and the core of its lowest boughs, the body of a rock or snowman. Brushing the outer branches is safe. Your skis are the part of the skier that collides.
+- **Any terminal size:** at 80 columns you see the whole slope plus the forest either side. Narrower terminals (down to 40 columns) get a camera that follows the skier, with compact art. Colour helps but isn't needed: every shape reads in monochrome.
 
 | Key | Action |
 |---|---|
@@ -143,7 +146,7 @@ Race down an endless, procedurally generated mountain. The slope scrolls toward 
 - **Lives:** you have 3 lives (Low Battery: 3, up to 5 with cocoa). A wipeout costs a life and 40 points, slows you down and gives 1.5 s of invincibility. Trees and snowmen are tall, so they hit you even mid-jump. Landing on a crevasse is fatal, whatever lives you have left.
 - **Scoring:** 1 point per metre (2 while tucked), plus 25 per token, 100 per gold token, 15 for jumping a rock, 25 for clearing a crevasse and 50 for big air. Each trick is worth 100 when you land cleanly, doubled if you land two in one jump. A crash in the air loses the tricks.
 - **Difficulty:** speed and obstacle density rise with distance. Snowmen, moguls, ramps and finally crevasses (from 150–400 m depending on difficulty) appear as you go.
-- **Fair by design:** the generator always keeps a safe line, 3 columns wide and drifting at most one column per row, free of anything that can hurt you, so there is never an unavoidable wall. Top speed is capped so you always get at least ~0.65 s to react. Tests check this across thousands of generated rows, and an autopilot skis 20 minutes on Hard without a crash.
+- **Fair by design:** the generator always keeps a safe line, 3 columns wide and drifting at most one column per row, free of anything that can hurt you, so there is never an unavoidable wall. The art of anything that can hurt you never covers that line either, and sprites never overlap, so nothing hides behind a tree. Top speed is capped so you always get at least ~0.75 s to react. Tests check this across thousands of generated rows, and an autopilot skis 20 minutes on Hard without a crash.
 - **Two modes:**
   - **Survival Sprint** (timed, 60 s by default): score as much as you can before time runs out.
   - **Endless Mountain** (untimed): no countdown, ever. You ski until you run out of lives, fall into a crevasse or quit. Distance, speed, lives and your best stay on screen.

@@ -102,6 +102,12 @@ export interface GameInstance {
   handleInput(key: Key): void;
   /** Advance the simulation by dtMs of real time. */
   update(dtMs: number): void;
+  /**
+   * Optional: the space (columns x rows) the arcade can give the game body,
+   * told before every render so games can adapt to resizes (e.g. a camera
+   * or smaller art). minSize still applies.
+   */
+  setViewport?(width: number, height: number): void;
   /** Lines for the central game area (may contain ANSI styling). */
   render(): string[];
   /** Extra HUD fields (combo, lives, length...). */

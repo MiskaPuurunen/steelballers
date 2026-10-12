@@ -1038,6 +1038,8 @@ export class App {
       ], columns), rows);
     }
 
+    // The body sits between 3 header rows and 2-3 footer rows, inside a 2-column gutter.
+    g.setViewport?.(columns - 4, rows - 6 - (this.agent ? 1 : 0));
     const gameLines = s.paused ? this.pauseOverlay(s) : g.render();
     const gameWidth = Math.max(...gameLines.map(visibleWidth), g.minSize.width);
     const width = Math.min(columns - 2, Math.max(76, gameWidth + 4));

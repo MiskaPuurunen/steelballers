@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CELL, HAZARDS, RUN_IN, SKIER_ROW, SLOPE_W, SkiSurvival, SlopeGenerator, VIEW_H, skiDef } from '../src/games/ski.js';
+import { CELL, HAZARDS, MIN_VIEW_W, RUN_IN, SKIER_ROW, SLOPE_W, SkiSurvival, SlopeGenerator, VIEW_H, skiDef, type Placement } from '../src/games/ski.js';
+import { ALL_SPRITES, ROCKS, SKIER, SNOWMAN, TOKEN, TREES } from '../src/games/ski-sprites.js';
+import { glyphAt, glyphSpan, hitCells, type Sprite } from '../src/ui/sprite.js';
 import { Rng } from '../src/core/rng.js';
 import { App } from '../src/ui/app.js';
 import { FakeTerminal } from '../src/ui/terminal.js';
 import { SaveStore } from '../src/storage/save.js';
-import { stripAnsi } from '../src/ui/style.js';
+import { setColor, stripAnsi, visibleWidth } from '../src/ui/style.js';
 import { ch, ctx, key, FakeScheduler } from './helpers.js';
 
 function ski(seed = 'ski', over: Parameters<typeof ctx>[1] = {}): SkiSurvival {
@@ -369,7 +371,340 @@ describe('Ski Survival in the arcade', () => {
     sched.advance(300);
     expect(text()).toContain('Survival Sprint');
     expect(text()).toMatch(/TIME \d:\d\d/);
+    // The 80x24 arcade gives the full slope: sprite skier, forest margins, real trees.
+    expect((app.currentGame as SkiSurvival).view()).toMatchObject({ cols: SLOPE_W, compact: false });
+    expect(text()).toContain('/|\\');
+    sched.advance(8000);
+    expect(text()).toMatch(/\/\*\\/);
+    expect(app.frame.every((l) => visibleWidth(l) <= 80)).toBe(true);
     sched.advance(61_000);
     expect(app.stateKind).toBe('results');
+  });
+});
+
+/* ------------------------------------------------------------ sprites */
+
+/** Put a real sprite on the slope with its anchor in visible row r, like the generator would. */
+function plant(g: SkiSurvival, sprite: Sprite, cell: string, x: number, r: number): void {
+  const rowIds = (g as unknown as { rowIds: number[] }).rowIds;
+  for (const { dx, dy } of hitCells(sprite)) if (r + dy >= 0) g.rows[r + dy][x + dx] = cell as never;
+  g.entities.push({ sprite, cell: cell as never, x, rowId: rowIds[r], hitMs: 0, phase: 0 });
+}
+
+const plain = (g: SkiSurvival) => g.render().map(stripAnsi);
+
+describe('Ski Survival: sprite art', () => {
+  it('every sprite is rectangular ASCII with no stray blank rows', () => {
+    for (const s of ALL_SPRITES) {
+      for (const art of [s, s.compact].filter(Boolean) as Array<Pick<Sprite, 'frames' | 'width' | 'height'>>) {
+        for (const f of art.frames) {
+          expect(f).toHaveLength(art.height);
+          for (const row of f) {
+            expect(row).toHaveLength(art.width);
+            expect(row).toMatch(/^[\x20-\x7e]*$/);
+          }
+          expect(glyphSpan(f[0]), `${s.name} top row`).not.toBeNull();
+          expect(glyphSpan(f[art.height - 1]), `${s.name} bottom row`).not.toBeNull();
+        }
+      }
+    }
+  });
+
+  it('has several distinct multi-line trees of varied size, each with foliage and a trunk', () => {
+    const trees = Object.values(TREES);
+    expect(trees.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(trees.map((t) => t.frames[0].join('\n'))).size).toBe(trees.length);
+    expect(new Set(trees.map((t) => t.width)).size).toBeGreaterThanOrEqual(3);
+    expect(new Set(trees.map((t) => t.height)).size).toBeGreaterThanOrEqual(2);
+    for (const t of trees) {
+      const rows = t.frames[0];
+      expect(t.height).toBeGreaterThanOrEqual(3);
+      expect(rows[rows.length - 1]).toMatch(/\|/); // trunk
+      expect(rows.slice(0, -1).join('')).toMatch(/\*/); // snow on the boughs
+      expect(rows.slice(0, -1).join('')).toMatch(/[/\\]/); // branches
+    }
+  });
+
+  it('every hitbox cell is inside the visible silhouette in every frame, compact art included', () => {
+    // A glyph, or the filled interior of a solid sprite's row (the inside of a snowman's body).
+    const inside = (s: Sprite, art: Pick<Sprite, 'frames' | 'anchor'>, f: number, dx: number, dy: number) => {
+      if (glyphAt(art as Sprite, f, dx, dy)) return true;
+      const span = glyphSpan(art.frames[f][art.anchor.y + dy] ?? '');
+      const col = art.anchor.x + dx;
+      return s.solid && !!span && col > span[0] && col < span[1];
+    };
+    for (const s of ALL_SPRITES) {
+      for (const { dx, dy } of hitCells(s)) {
+        s.frames.forEach((_, f) => expect(inside(s, s, f, dx, dy), `${s.name} frame ${f} (${dx},${dy})`).toBe(true));
+        if (s.compact) expect(inside(s, s.compact, 0, dx, dy), `${s.name} compact (${dx},${dy})`).toBe(true);
+      }
+    }
+  });
+
+  it('foliage is wider than the solid part, so brushing the boughs is safe', () => {
+    for (const t of [...Object.values(TREES), SNOWMAN, ...Object.values(ROCKS)]) {
+      const art = new Set<string>();
+      for (let r = 0; r < t.height; r++) for (let c = 0; c < t.width; c++) if (t.frames[0][r][c] !== ' ') art.add(`${c - t.anchor.x},${r - t.anchor.y}`);
+      const solid = hitCells(t);
+      expect(solid.length, t.name).toBeLessThan(art.size / 2);
+      expect(Math.max(...solid.map((h) => Math.abs(h.dx)))).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it('skier poses share one frame size and anchor on the skis', () => {
+    for (const [name, s] of Object.entries(SKIER)) {
+      expect(s.width, name).toBe(5);
+      expect(s.anchor.x, name).toBe(2);
+      expect(s.anchor.y, name).toBe(s.height - 1);
+    }
+    // Carving poses lean opposite ways.
+    expect(SKIER.left.frames[0][3]).toContain('\\');
+    expect(SKIER.right.frames[0][3]).toContain('/');
+  });
+});
+
+describe('Ski Survival: sprite placement', () => {
+  function run(seed: string, rows = 1500) {
+    const gen = new SlopeGenerator(new Rng(seed), { level: 2, specialMult: 2 });
+    const out: Array<{ row: string[]; safeX: number; placed: Placement[] }> = [];
+    for (let d = 0; d < rows; d++) {
+      const row = gen.next(d);
+      out.push({ row: [...row], safeX: gen.safeX, placed: [...gen.placed] });
+    }
+    return out;
+  }
+
+  it('plants a mix of tree variants', () => {
+    const used = new Set(run('variety').flatMap((r) => r.placed).filter((p) => p.cell === CELL.TREE).map((p) => p.sprite.name));
+    expect(used.size).toBe(Object.keys(TREES).length);
+  });
+
+  it('never overlaps two sprites, and keeps hazard art off the safe line', () => {
+    for (const seed of ['ov-1', 'ov-2', 'ov-3']) {
+      const rows = run(seed);
+      const art = new Map<string, string>();
+      const problems: string[] = [];
+      rows.forEach(({ placed }) => {
+        for (const p of placed) {
+          const owner = `${p.sprite.name}@${p.d},${p.x}`;
+          for (let r = 0; r < p.sprite.height; r++) {
+            const d = p.d + (p.sprite.anchor.y - r);
+            for (const f of p.sprite.frames) {
+              for (let c = 0; c < p.sprite.width; c++) {
+                if (f[r][c] === ' ') continue;
+                const x = p.x + c - p.sprite.anchor.x;
+                if (x < 0 || x >= SLOPE_W) continue;
+                const k = `${d},${x}`;
+                if (art.has(k) && art.get(k) !== owner) problems.push(`${owner} overlaps ${art.get(k)} at ${k}`);
+                art.set(k, owner);
+                if (p.cell && HAZARDS.has(p.cell) && rows[d] && Math.abs(x - rows[d].safeX) <= 1) problems.push(`${owner} on the safe line at ${k}`);
+              }
+            }
+          }
+        }
+      });
+      expect(problems, seed).toEqual([]);
+    }
+  });
+
+  it('the grid holds exactly the hitboxes of the sprites placed', () => {
+    const rows = run('grid');
+    const expected = rows.map(() => Array(SLOPE_W).fill(CELL.EMPTY));
+    rows.forEach(({ placed }) => {
+      for (const p of placed) if (p.cell) for (const { dx, dy } of hitCells(p.sprite)) if (expected[p.d - dy]) expected[p.d - dy][p.x + dx] = p.cell;
+    });
+    rows.forEach(({ row }, d) => expect(row.join(''), `row ${d}`).toBe(expected[d].join('')));
+  });
+});
+
+describe('Ski Survival: collisions with sprites', () => {
+  it("skiing through a tree's outer boughs is safe; its trunk is not", () => {
+    const g = ski();
+    plant(g, TREES.pine, CELL.TREE, g.x + 3, SKIER_ROW - 1);
+    for (let i = 0; i < 8; i++) g.scroll();
+    expect(g.lives).toBe(3);
+    plant(g, TREES.pine, CELL.TREE, g.x, SKIER_ROW - 1);
+    g.scroll();
+    expect(g.lives).toBe(2);
+    expect(g.entities.some((e) => e.hitMs > 0)).toBe(true); // the tree shakes
+  });
+
+  it('the lowest boughs of a tree are solid, not just the trunk', () => {
+    const g = ski();
+    plant(g, TREES.pine, CELL.TREE, g.x + 1, SKIER_ROW - 1);
+    g.scroll();
+    expect(g.lives).toBe(3); // the trunk passes beside the skis
+    g.scroll();
+    expect(g.lives).toBe(2); // the core of the boughs above it does not
+  });
+
+  it('touching any part of a token collects all of it', () => {
+    const g = ski();
+    plant(g, TOKEN, CELL.TOKEN, g.x + 1, SKIER_ROW - 1);
+    g.scroll();
+    expect(g.tokens).toBe(1);
+    expect(g.score).toBe(25);
+    expect(g.rows[SKIER_ROW].filter((c) => c === CELL.TOKEN)).toHaveLength(0);
+    expect(g.entities).toHaveLength(0);
+    expect(plain(g).join('\n')).toMatch(/\*/); // sparkle
+  });
+
+  it('jumping clears a boulder sprite but not a snowman sprite', () => {
+    const g = ski();
+    g.handleInput(ch('w'));
+    plant(g, ROCKS.boulder, CELL.ROCK, g.x, SKIER_ROW - 1);
+    g.scroll();
+    expect(g.lives).toBe(3);
+    plant(g, SNOWMAN, CELL.SNOWMAN, g.x, SKIER_ROW - 1);
+    g.scroll();
+    expect(g.lives).toBe(2);
+  });
+});
+
+describe('Ski Survival: poses and animation', () => {
+  it('the pose follows what the skier is doing', () => {
+    const g = ski();
+    expect(g.pose().pose).toBe('straight');
+    g.handleInput(key('left'));
+    expect(g.pose().pose).toBe('left');
+    expect(g.pose()).toEqual(g.pose()); // stable, not random
+    for (let i = 0; i < 4; i++) g.update(100);
+    expect(g.pose().pose).toBe('straight');
+    g.handleInput(key('right'));
+    expect(g.pose().pose).toBe('right');
+    for (let i = 0; i < 4; i++) g.update(100);
+    g.handleInput(ch('s'));
+    expect(g.pose().pose).toBe('tuck');
+    g.handleInput(key('space'));
+    expect(g.pose().pose).toBe('brake');
+  });
+
+  it('jumps lift the skier over a shadow; big-air tricks animate', () => {
+    const g = ski();
+    g.setViewport(76, 20);
+    g.handleInput(ch('w'));
+    expect(g.pose()).toMatchObject({ pose: 'air' });
+    expect(g.pose().lift).toBeGreaterThanOrEqual(1);
+    expect(plain(g)[SKIER_ROW]).toContain("'-'");
+    for (let i = 0; i < 10; i++) g.update(100);
+    expect(g.air).toBeNull();
+    expect(g.pose().lift).toBe(0);
+
+    g.rows[SKIER_ROW] = emptyRow();
+    incoming(g, g.x, CELL.RAMP);
+    g.scroll();
+    for (let i = 0; i < 5; i++) g.update(100);
+    expect(g.pose().lift).toBe(2);
+    g.handleInput(ch('w'));
+    const frames = new Set<number>();
+    for (let i = 0; i < 4; i++) {
+      expect(g.pose().pose).toBe('spin');
+      frames.add(g.pose().frame);
+      g.update(100);
+    }
+    expect(frames.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it('crashing shows a wipeout, and the skier never vanishes while invincible', () => {
+    const g = ski();
+    g.setViewport(76, 20);
+    incoming(g, g.x, CELL.TREE);
+    g.scroll();
+    expect(g.pose().pose).toBe('crash');
+    while (g.invincibleMs > 0) {
+      const rows = plain(g);
+      expect(rows.slice(SKIER_ROW - 3, SKIER_ROW + 1).join('\n')).toMatch(/o/);
+      g.update(50);
+    }
+  });
+});
+
+describe('Ski Survival: rendering', () => {
+  it('fits the viewport it is given, from the narrowest to wide terminals', () => {
+    const g = ski('fit');
+    for (let i = 0; i < 400; i++) {
+      autopilot(g);
+      g.update(33);
+    }
+    for (const w of [MIN_VIEW_W + 2, 40, 47, 58, 64, 76, 120]) {
+      g.setViewport(w, 20);
+      const lines = g.render();
+      expect(lines).toHaveLength(VIEW_H);
+      const widths = new Set(lines.map(visibleWidth));
+      expect(widths.size, `width ${w}`).toBe(1);
+      expect([...widths][0]).toBeLessThanOrEqual(w);
+    }
+    // Without a viewport it stays within minSize.
+    expect(Math.max(...ski().render().map(visibleWidth))).toBeLessThanOrEqual(g.minSize.width);
+  });
+
+  it('uses compact art in narrow views, and the camera keeps the skier in sight', () => {
+    const g = ski('cam');
+    g.setViewport(MIN_VIEW_W + 2, 20);
+    expect(g.view().compact).toBe(true);
+    g.setViewport(76, 20);
+    expect(g.view()).toEqual({ cols: SLOPE_W, margin: 8, compact: false });
+    g.setViewport(MIN_VIEW_W + 2, 20);
+    for (const target of [0, SLOPE_W - 1, 10, 40]) {
+      g.rows = g.rows.map(() => emptyRow());
+      g.entities = [];
+      while (g.x !== target) g.handleInput(key(g.x < target ? 'right' : 'left'));
+      for (let i = 0; i < 3; i++) g.update(100); // let the carve pose settle
+      expect(plain(g)[SKIER_ROW - 2], `skier at ${target}`).toContain('/|\\');
+    }
+  });
+
+  it('sprites at the slope edges are clipped without breaking the frame', () => {
+    const g = ski();
+    g.setViewport(76, 20);
+    plant(g, TREES.evergreen, CELL.TREE, 0, 8);
+    plant(g, TREES.windblown, CELL.TREE, SLOPE_W - 1, 8);
+    plant(g, TREES.pine, CELL.TREE, 20, 2); // canopy pokes above the top row
+    const rows = plain(g);
+    expect(rows).toHaveLength(VIEW_H);
+    expect(new Set(rows.map((r) => r.length)).size).toBe(1);
+    for (const r of rows) {
+      expect(r[8]).toBe('|');
+      expect(r[8 + SLOPE_W + 1]).toBe('|');
+    }
+    expect(rows[1]).toContain('/_*_*_\\');
+  });
+
+  it('is plain ASCII without colour, so monochrome terminals get the same shapes', () => {
+    const g = ski();
+    g.setViewport(76, 20);
+    for (let i = 0; i < 300; i++) {
+      autopilot(g);
+      g.update(33);
+    }
+    setColor(false);
+    for (const l of g.render()) expect(l).toMatch(/^[\x20-\x7e]*$/);
+    setColor(true);
+    try {
+      expect(g.render().join('')).toContain('\x1b[');
+    } finally {
+      setColor(false);
+    }
+  });
+
+  it('keeps up with continuous scrolling at full width', () => {
+    const g = new SkiSurvival({ ...ctx('perf', { difficulty: 'hard' }), durationMs: null });
+    g.setViewport(76, 20);
+    setColor(true);
+    const t0 = performance.now();
+    try {
+      for (let i = 0; i < 3000; i++) {
+        autopilot(g);
+        g.update(33);
+        g.render();
+      }
+    } finally {
+      setColor(false);
+    }
+    const perFrame = (performance.now() - t0) / 3000;
+    expect(g.crashes).toBe(0);
+    expect(g.distance).toBeGreaterThan(800);
+    // A frame at 30fps has a 33ms budget; stay far below it.
+    expect(perFrame).toBeLessThan(4);
   });
 });

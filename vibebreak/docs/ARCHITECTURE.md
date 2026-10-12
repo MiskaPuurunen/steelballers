@@ -19,8 +19,11 @@ src/
                 base-game.ts   BaseGame: round clock, scoring w/ multipliers, feedback, end state
                 progression.ts XP curve, achievements, recordRound()
   games/        bugbash.ts snake.ts ski.ts stack.ts dungeon.ts crossy.ts tetris.ts, index.ts (registry)
+                ski-sprites.ts  Ski Survival art: tree variants, obstacles, skier poses, effects (data only)
   ui/           terminal.ts    TerminalIO: NodeTerminal (real) and FakeTerminal (tests)
                 screen.ts      line-diffing renderer with synchronized updates
+                sprite.ts      multi-line ASCII sprites: frames, anchor, colour roles, hitboxes, compact art
+                canvas.ts      layered character grid: clipped sprite blits, run-grouped ANSI output
                 keys.ts        raw stdin -> Key events (CSI/SS3 arrows, ctrl chars, paste)
                 style.ts       ANSI palette (16 colours, optional 256) with NO_COLOR/TTY fallback, width helpers
                 themes.ts      theme registry, palette swap, themed rules, stateless particle field + margin overlay
@@ -66,6 +69,7 @@ interface GameInstance {
   readonly minSize: { width: number; height: number };
   handleInput(key: Key): void;   // called by the shell's single input handler
   update(dtMs: number): void;     // called by the shell's single loop
+  setViewport?(w: number, h: number): void; // optional: space available, told before each render
   render(): string[];             // lines for the central area
   hud(): HudItem[];
   feedback(): { text; tone } | null;
