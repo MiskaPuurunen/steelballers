@@ -111,7 +111,7 @@ describe('App flow', () => {
     expect(app.currentGame!.timeLeftMs()).toBe(left);
     io.resize(100, 34);
     sched.advance(500);
-    expect(app.currentGame!.timeLeftMs()).toBeLessThan(left);
+    expect(app.currentGame!.timeLeftMs()).toBeLessThan(left!);
   });
 
   it('arcade, stats and daily screens render', () => {
@@ -143,7 +143,8 @@ describe('App flow', () => {
   });
 
   it('only redraws changed lines (no full-screen flicker per frame)', () => {
-    const { io, sched } = setup({ mode: 'play', session: { gameId: 'codesprint', seed: 'F' } });
+    // A turn-based game: nothing moves between key presses.
+    const { io, sched } = setup({ mode: 'play', session: { gameId: 'dungeon', seed: 'F' } });
     io.send('\r');
     sched.advance(200);
     const before = io.output.length;
@@ -248,15 +249,15 @@ describe('per-game arcade keys (Tetris)', () => {
     expect(first.timeLeftMs()).toBe(t);
     io.send('p');
     sched.advance(100);
-    expect(first.timeLeftMs()).toBeLessThan(t);
+    expect(first.timeLeftMs()).toBeLessThan(t!);
     io.send('r');
     expect(app.currentGame).not.toBe(first);
     io.send('q');
     expect(app.stateKind).toBe('results');
   });
 
-  it('typing games keep those letters', () => {
-    const { app, io, sched } = setup({ mode: 'play', session: { gameId: 'codesprint', seed: 'CS-1' } });
+  it('games without arcade shortcuts keep those letters (Q is a Bug Bash hit key)', () => {
+    const { app, io, sched } = setup({ mode: 'play', session: { gameId: 'bugbash', seed: 'BB-1' } });
     sched.advance(4100);
     io.send('q');
     expect(app.stateKind).toBe('playing');

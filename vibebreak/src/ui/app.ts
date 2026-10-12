@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { GameDefinition, GameInstance, GameResult, Key, SessionConfig, Tone } from '../core/types.js';
+import { sessionTiming, type GameDefinition, type GameInstance, type GameResult, type Key, type SessionConfig, type Tone } from '../core/types.js';
 import { Rng } from '../core/rng.js';
 import { generateSession, todayUtc, type SessionOptions } from '../core/session.js';
 import { getModifier, DIFFICULTIES } from '../core/modifiers.js';
@@ -111,7 +111,8 @@ type State =
   | { kind: 'custom'; sel: number; confirmDelete: boolean }
   | { kind: 'custom-file'; input: LineInput; error: string | null; failedSource: string | null }
   | { kind: 'custom-editor'; error: string | null; confirmClear: boolean }
-  | { kind: 'lan'; screen: LanScreen };
+  | { kind: 'lan'; screen: LanScreen }
+  | { kind: 'timing'; sel: number };
 
 type CustomStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
 
@@ -122,6 +123,7 @@ const MENU_ITEMS: Array<{ key: string; label: string; hint: string }> = [
   { key: '4', label: 'STATS & ACHIEVEMENTS', hint: 'your progress' },
   { key: '5', label: 'THEMES', hint: 'Christmas, Halloween, Frutiger Aero...' },
   { key: '6', label: 'CUSTOM GAMES', hint: 'play your own Lua games' },
+  { key: 'T', label: 'TIMER', hint: 'timed rounds or no countdown' },
   { key: 'H', label: 'HOST LAN GAME', hint: 'Battleship, Prompt Panic, Doodle Protocol' },
   { key: 'J', label: 'JOIN LAN GAME', hint: 'find a room on your network' },
   { key: 'P', label: 'PARTY MODE', hint: 'host a random party game mix' },
@@ -178,6 +180,7 @@ export class App {
   /** The paste/write editor keeps its text between visits. */
   private readonly draft = new TextEditor();
   private readonly lanDeps: Partial<LanDeps>;
+  private timingOverride: boolean | undefined;
 
   constructor(opts: AppOptions) {
     this.io = opts.io;
@@ -195,6 +198,8 @@ export class App {
     this.countdownMs = opts.countdownMs ?? COUNTDOWN_MS;
     this.launchedToPlay = opts.start.mode !== 'menu';
     this.lanDeps = opts.lanDeps ?? {};
+    // `vibebreak play --no-timer` / `--timer` beat the saved preference for this run.
+    if (opts.start.mode === 'play' && opts.start.session.untimed !== undefined) this.timingOverride = opts.start.session.untimed;
     applyTheme(resolveTheme(opts.themeOverride ?? this.save.settings.theme));
     this.state = { kind: 'menu', sel: 0 };
     if (opts.start.mode === 'play') this.toBriefing(this.newSession(opts.start.session));
@@ -381,6 +386,7 @@ export class App {
       case 'custom': return this.customKey(s, key);
       case 'custom-file': return this.customFileKey(s, key);
       case 'custom-editor': return this.customEditorKey(s, key);
+      case 'timing': return this.timingKey(s, key);
       case 'lan':
         s.screen.onKey(key);
         if (s.screen.done) this.state = { kind: 'menu', sel: 0 };
@@ -398,9 +404,21 @@ export class App {
 
   /* -------------------------------------------------------- sessions */
 
+  /** Untimed unless told otherwise by the round, the command line or the saved setting. */
+  private wantsUntimed(opts: SessionOptions): boolean {
+    return opts.untimed ?? this.timingOverride ?? this.save.settings.timing === 'untimed';
+  }
+
   private newSession(opts: SessionOptions): SessionConfig {
-    if (opts.gameId?.startsWith(CUSTOM_PREFIX)) return generateSession(this.customGames, { ...opts, previousGameId: null });
-    return generateSession(this.games, { previousGameId: this.save.lastGameId, ...opts });
+    const untimed = this.wantsUntimed(opts);
+    if (opts.gameId?.startsWith(CUSTOM_PREFIX)) return generateSession(this.customGames, { ...opts, untimed, previousGameId: null });
+    return generateSession(this.games, { previousGameId: this.save.lastGameId, ...opts, untimed });
+  }
+
+  /** The same round (seed, game, modifier) with the other timing. */
+  private flipTiming(session: SessionConfig): SessionConfig {
+    const untimed = session.durationMs !== null;
+    return this.newSession({ seed: session.seed, gameId: session.gameId, difficulty: session.difficulty, modifierId: session.modifierId, untimed });
   }
 
   private def(id: string): GameDefinition {
@@ -417,7 +435,8 @@ export class App {
 
   private startRound(session: SessionConfig): void {
     const def = this.def(session.gameId);
-    const best = def.custom ? this.save.customScores[session.gameId] : this.save.highScores[session.gameId];
+    const best = def.custom ? this.save.customScores[session.gameId]
+      : session.durationMs === null ? this.save.untimedScores[session.gameId] : this.save.highScores[session.gameId];
     let game: GameInstance;
     try {
       game = def.create({
@@ -478,6 +497,7 @@ export class App {
       this.state = { kind: 'themes', sel: cur >= 0 ? cur : ids.indexOf(activeTheme().id), revertTo: activeTheme() };
     }
     else if (k === '6') this.toCustomList();
+    else if (k === 'T') this.state = { kind: 'timing', sel: this.save.settings.timing === 'untimed' ? 1 : 0 };
     else if (k === 'H') this.state = { kind: 'lan', screen: this.newLan({ mode: 'host' }) };
     else if (k === 'J') this.state = { kind: 'lan', screen: this.newLan({ mode: 'join' }) };
     else if (k === 'P') this.state = { kind: 'lan', screen: this.newLan({ mode: 'host', party: true }) };
@@ -501,12 +521,16 @@ export class App {
     const ch = key.ch?.toLowerCase();
     if (key.name === 'enter' || key.name === 'space') {
       if (this.enterOk()) this.startRound(s.session);
+    } else if (ch === 't' && !s.session.daily && this.def(s.session.gameId).untimed) {
+      // Same round, other timing (for this round only; [T] in the menu sets the default).
+      this.timingOverride = s.session.durationMs !== null;
+      this.toBriefing(this.flipTiming(s.session));
     } else if (ch === 'r' && this.isCustom(s.session)) {
       // Custom games reroll the seed, difficulty and modifier, not the game.
       this.toBriefing(this.newSession({ gameId: s.session.gameId }));
     } else if (ch === 'r' && !s.session.daily) {
       // Reroll: a fresh random session that avoids the game just offered.
-      this.toBriefing(generateSession(this.games, { previousGameId: s.session.gameId }));
+      this.toBriefing(this.newSession({ previousGameId: s.session.gameId, untimed: s.session.durationMs === null }));
     } else if (key.name === 'escape' || ch === 'q') {
       if (this.isCustom(s.session)) this.toCustomList(s.session.gameId);
       else this.state = { kind: 'menu', sel: 0 };
@@ -565,7 +589,7 @@ export class App {
       // Replay the same game. The daily replays its fixed seed.
       const next = s.session.daily
         ? this.newSession({ daily: s.session.daily })
-        : this.newSession({ gameId: s.session.gameId });
+        : this.newSession({ gameId: s.session.gameId, untimed: s.session.durationMs === null });
       this.toBriefing(next);
     } else if (ch === 'n') {
       this.toBriefing(this.newSession({}));
@@ -602,6 +626,22 @@ export class App {
     if (key.name === 'escape' || key.name === 'enter' || ch === 'q' || key.name === 'backspace') {
       this.state = { kind: 'menu', sel: 3 };
     }
+  }
+
+  private timingKey(s: Extract<State, { kind: 'timing' }>, key: Key): void {
+    const ch = key.ch?.toLowerCase();
+    const choose = (i: number) => {
+      this.save.settings.timing = i === 1 ? 'untimed' : 'timed';
+      this.timingOverride = undefined;
+      this.notice = this.store.save(this.save)
+        ? (i === 1 ? 'Timer off: rounds end on game over, or when you press Esc.' : 'Timer on: rounds have a time limit.')
+        : 'Could not save the timer setting.';
+      this.state = { kind: 'menu', sel: MENU_ITEMS.findIndex((m) => m.key === 'T') };
+    };
+    if (key.name === 'up' || key.name === 'down' || key.name === 'tab') s.sel = 1 - s.sel;
+    else if (ch === '1' || ch === '2') choose(Number(ch) - 1);
+    else if (key.name === 'enter' || key.name === 'space') { if (this.enterOk()) choose(s.sel); }
+    else if (key.name === 'escape' || ch === 'q' || key.name === 'backspace') this.state = { kind: 'menu', sel: MENU_ITEMS.findIndex((m) => m.key === 'T') };
   }
 
   private themesKey(s: Extract<State, { kind: 'themes' }>, key: Key): void {
@@ -856,6 +896,7 @@ export class App {
         case 'custom-file': lines = this.renderCustomFile(this.state); break;
         case 'custom-editor': lines = this.renderEditor(this.state); break;
         case 'lan': lines = this.state.screen.render(columns, rows); break;
+        case 'timing': lines = this.renderTiming(this.state); break;
       }
       // Ambient particles fill empty space on menu-like screens, never on a game board.
       const specs = activeTheme().particles;
@@ -913,7 +954,8 @@ export class App {
     body.push('');
     MENU_ITEMS.forEach((it, i) => {
       const sel = i === s.sel;
-      const label = `[${it.key}] ${it.label}`;
+      const name = it.key === 'T' ? `TIMER: ${this.save.settings.timing === 'untimed' ? 'OFF (untimed)' : 'ON'}` : it.label;
+      const label = `[${it.key}] ${name}`;
       body.push(sel ? theme.primary('> ') + c.inverse(c.bold(` ${label} `)) + ' ' + theme.muted(it.hint) : '   ' + label + ' ');
     });
     body.push('');
@@ -922,7 +964,7 @@ export class App {
     if (ai) body.push(ai);
     if (this.notice) body.push(theme.gold(this.notice));
     body.push('');
-    body.push(keyHint([['Up/Down', 'select'], ['Enter', 'go'], ['1-6 H J P', 'shortcut'], ['Q', 'quit']]));
+    body.push(keyHint([['Up/Down', 'select'], ['Enter', 'go'], ['1-6 T H J P', 'shortcut'], ['Q', 'quit']]));
     return centerVertically(centerBlock(body, columns), rows);
   }
 
@@ -962,7 +1004,12 @@ export class App {
     const modColor = s.session.modifierId === 'standard' ? theme.muted : s.session.modifierId === 'chaos' ? theme.bad : theme.gold;
     body.push(padRight(theme.muted('Modifier'), 12) + modColor(c.bold(mod.name)) + theme.muted(' - ' + mod.description));
     body.push(padRight(theme.muted('Difficulty'), 12) + diff);
-    body.push(padRight(theme.muted('Time limit'), 12) + `${Math.round(s.session.durationMs / 1000)}s`);
+    const untimed = s.session.durationMs === null;
+    if (def.modeNames) body.push(padRight(theme.muted('Mode'), 12) + theme.accent(c.bold(untimed ? def.modeNames.untimed : def.modeNames.timed)));
+    body.push(untimed
+      ? padRight(theme.muted('Timer'), 12) + theme.good('none') + theme.muted(' - play until game over, or Esc to end the round')
+      : padRight(theme.muted('Time limit'), 12) + `${Math.round(s.session.durationMs! / 1000)}s`);
+    if (s.session.timingNote) body.push(padRight('', 12) + theme.gold(s.session.timingNote));
     body.push(padRight(theme.muted('Seed'), 12) + theme.primary(s.session.seed));
     body.push('');
     body.push(theme.muted('Controls'));
@@ -972,6 +1019,7 @@ export class App {
     body.push(theme.primary(c.bold(`Starting in ${secs}...`)));
     const hints: Array<[string, string]> = [['Enter', 'start now']];
     if (!s.session.daily) hints.push(['R', custom ? 'new seed' : 'reroll']);
+    if (!s.session.daily && def.untimed) hints.push(['T', untimed ? 'play timed' : 'play untimed']);
     hints.push(['Esc', custom ? 'back' : 'menu']);
     body.push(keyHint(hints));
     return centerVertically(centerBlock(body, columns), rows);
@@ -995,14 +1043,22 @@ export class App {
     const width = Math.min(columns - 2, Math.max(76, gameWidth + 4));
     const mod = getModifier(s.session.modifierId);
     const left = theme.accent(c.bold('VIBEBREAK')) + theme.muted(' > ') + theme.primary(c.bold(s.def.name.toUpperCase()));
-    const rightParts = [mod.id !== 'standard' ? theme.gold(mod.name) : '', theme.muted(s.session.difficulty), theme.muted(`seed ${s.session.seed}`)].filter(Boolean);
+    const timing = sessionTiming(s.session);
+    const modeName = s.def.modeNames ? s.def.modeNames[timing] : timing === 'untimed' ? 'untimed' : '';
+    const rightParts = [modeName ? theme.accent(modeName) : '', mod.id !== 'standard' ? theme.gold(mod.name) : '', theme.muted(s.session.difficulty), theme.muted(`seed ${s.session.seed}`)].filter(Boolean);
     const header = spread(left, rightParts.join(theme.muted(' · ')), width);
 
     const tl = g.timeLeftMs();
-    const timeTone = tl <= 5000 ? (s2: string) => c.bold(theme.bad(s2)) : tl <= 10000 ? theme.gold : c.bold;
-    const hud = theme.muted('SCORE ') + c.bold(theme.primary(fmt(g.score))) + theme.muted('  |  TIME ') + timeTone(fmtTime(tl)) + theme.muted('  |  ') + hudLine(g.hud());
+    // Untimed rounds show no countdown at all (nothing to count down to).
+    let clock: string;
+    if (tl === null) clock = theme.muted('NO TIMER');
+    else {
+      const timeTone = tl <= 5000 ? (s2: string) => c.bold(theme.bad(s2)) : tl <= 10000 ? theme.gold : c.bold;
+      clock = theme.muted('TIME ') + timeTone(fmtTime(tl));
+    }
+    const hud = theme.muted('SCORE ') + c.bold(theme.primary(fmt(g.score))) + theme.muted('  |  ') + clock + theme.muted('  |  ') + hudLine(g.hud());
     let fb = g.feedback();
-    if (!fb && tl <= 5000 && !s.paused) fb = { text: `Round ends in ${Math.ceil(tl / 1000)}...`, tone: 'bad' };
+    if (!fb && tl !== null && tl <= 5000 && !s.paused) fb = { text: `Round ends in ${Math.ceil(tl / 1000)}...`, tone: 'bad' };
     const feedback = fb ? tone(fb.tone)(c.bold(fb.text)) : '';
 
     const body: string[] = [];
@@ -1019,7 +1075,7 @@ export class App {
   }
 
   private pauseOverlay(s: Extract<State, { kind: 'playing' }>): string[] {
-    const lines = ['', theme.title('PAUSED'), theme.muted('The clock is stopped.'), ''];
+    const lines = ['', theme.title('PAUSED'), theme.muted(s.session.durationMs === null ? 'Take your time.' : 'The clock is stopped.'), ''];
     PAUSE_ITEMS.forEach((label, i) => {
       lines.push(i === s.pauseSel ? theme.primary('> ') + c.inverse(c.bold(` ${label} `)) : `   ${label} `);
     });
@@ -1042,13 +1098,15 @@ export class App {
     const mod = getModifier(s.session.modifierId);
     const body: string[] = [];
     body.push(theme.title(titleByReason[result.endReason]) + (result.perfect ? '  ' + theme.gold(c.bold('* PERFECT RUN *')) : ''));
-    body.push(theme.muted(`${s.def.name} · ${mod.name} · ${s.session.difficulty} · seed ${s.session.seed}`));
+    const timing = sessionTiming(s.session);
+    const modeName = s.def.modeNames ? s.def.modeNames[timing] : timing === 'untimed' ? 'untimed' : '';
+    body.push(theme.muted([s.def.name, modeName, mod.name, s.session.difficulty, `seed ${s.session.seed}`].filter(Boolean).join(' · ')));
     body.push('');
     let scoreLine = theme.muted('SCORE  ') + c.bold(theme.primary(fmt(s.shownScore)));
     if (summary.newHighScore && s.shownScore >= result.score) {
       scoreLine += '   ' + theme.gold(c.bold('NEW PERSONAL BEST!')) + (summary.previousBest !== null ? theme.muted(` (was ${fmt(summary.previousBest)})`) : '');
     } else if (summary.previousBest !== null && !summary.newHighScore) {
-      scoreLine += theme.muted(`   best ${fmt(summary.previousBest)}`);
+      scoreLine += theme.muted(`   best ${fmt(summary.previousBest)}${timing === 'untimed' ? ' (untimed)' : ''}`);
     }
     body.push(scoreLine);
     if (summary.dailyBest !== undefined) body.push(theme.muted('Daily best today: ') + c.bold(fmt(summary.dailyBest)));
@@ -1082,6 +1140,31 @@ export class App {
     if (ai) body.push('', ai);
     body.push('');
     body.push(keyHint([['Enter', s.session.daily ? 'retry daily' : 'replay'], ['N', 'play another'], ['M', s.def.custom ? 'my games' : 'menu'], ['Q', 'quit to shell']]));
+    return centerVertically(centerBlock(body, columns), rows);
+  }
+
+  private renderTiming(s: Extract<State, { kind: 'timing' }>): string[] {
+    const { columns, rows } = this.io;
+    const w = Math.min(columns - 4, 76);
+    const opt = (i: number, name: string, desc: string) => {
+      const sel = i === s.sel;
+      const saved = (i === 1) === (this.save.settings.timing === 'untimed') ? theme.gold(' *') : '';
+      return [(sel ? theme.primary('> ') + c.inverse(c.bold(` [${i + 1}] ${name} `)) : `   [${i + 1}] ${name} `) + saved, '       ' + theme.muted(desc)];
+    };
+    const untimedGames = this.games.filter((g) => g.untimed).map((g) => (g.modeNames ? `${g.name} (${g.modeNames.untimed})` : g.name));
+    const body: string[] = [
+      theme.title('SESSION MODE'),
+      '',
+      ...opt(0, 'Timed', "Play within each game's time limit (Ski Survival: Survival Sprint)."),
+      '',
+      ...opt(1, 'Untimed', 'No countdown: play until game over, or press Esc to end the round.'),
+      '',
+      ...wrapText('Applies to Quick Play, the arcade and replays; T in the briefing flips a single round. The daily challenge is always timed. Untimed rounds keep separate personal bests.', w).map((l) => theme.muted(l)),
+      '',
+      ...wrapText(`Untimed play: ${untimedGames.join(', ')}. Bug Bash gets 5 lives instead of a clock. Custom Lua games are always timed.`, w).map((l) => theme.muted(l)),
+      '',
+      keyHint([['Up/Down', 'select'], ['Enter', 'keep'], ['1-2', 'choose'], ['Esc', 'back']]),
+    ];
     return centerVertically(centerBlock(body, columns), rows);
   }
 

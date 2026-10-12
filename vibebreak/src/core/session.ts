@@ -15,6 +15,12 @@ export interface SessionOptions {
   modifierId?: string;
   /** Round time limit in seconds (clamped). Defaults to the game's own. */
   durationSec?: number;
+  /**
+   * Play without a gameplay deadline. Applies only to games that support it
+   * (GameDefinition.untimed); others fall back to timed with a timingNote.
+   * The daily challenge is always timed so scores stay comparable.
+   */
+  untimed?: boolean;
   /** Daily challenge date YYYY-MM-DD. Overrides seed and duration. */
   daily?: string;
 }
@@ -79,14 +85,27 @@ export function generateSession(
     ? game.defaultDurationSec
     : clampDuration(opts.durationSec);
 
+  // Timing never consumes randomness, so a seed reproduces the same round
+  // whether it is played timed or untimed.
+  let timingNote: string | undefined;
+  let untimed = !!opts.untimed;
+  if (untimed && opts.daily) {
+    untimed = false;
+    timingNote = 'The daily challenge is always timed, so everyone plays the same round.';
+  } else if (untimed && !game.untimed) {
+    untimed = false;
+    timingNote = `${game.name} has no untimed mode; playing timed.`;
+  }
+
   return {
     seed,
     gameId: game.id,
     difficulty,
     modifierId: modifier.id,
     effects,
-    durationMs: durationSec * 1000,
+    durationMs: untimed ? null : durationSec * 1000,
     ...(opts.daily ? { daily: opts.daily } : {}),
+    ...(timingNote ? { timingNote } : {}),
   };
 }
 

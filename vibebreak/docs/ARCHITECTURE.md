@@ -18,7 +18,7 @@ src/
                 modifiers.ts   modifier + difficulty tables -> concrete Effects
                 base-game.ts   BaseGame: round clock, scoring w/ multipliers, feedback, end state
                 progression.ts XP curve, achievements, recordRound()
-  games/        bugbash.ts snake.ts codesprint.ts stack.ts dungeon.ts crossy.ts tetris.ts, index.ts (registry)
+  games/        bugbash.ts snake.ts ski.ts stack.ts dungeon.ts crossy.ts tetris.ts, index.ts (registry)
   ui/           terminal.ts    TerminalIO: NodeTerminal (real) and FakeTerminal (tests)
                 screen.ts      line-diffing renderer with synchronized updates
                 keys.ts        raw stdin -> Key events (CSI/SS3 arrows, ctrl chars, paste)
@@ -90,6 +90,15 @@ A single state machine: `menu → arcade → briefing → playing (paused?) → 
 - **Debouncing.** Menus ignore a second Enter within 150 ms. The results screen ignores keys for 600 ms after a round ends, so a mashed key can't skip your score. Bug Bash and Stack Overflow ignore immediate repeats of the key that just scored or dropped.
 - **Too-small terminals.** If the window is smaller than the game's `minSize` plus the HUD, the game is paused (its clock does not advance) and a resize hint is shown. Every game fits 80×24.
 - **Injected dependencies.** `TerminalIO`, a `Scheduler` (clock + interval) and the `SaveStore` are all injected. The app tests drive the whole flow with a fake terminal and a fake clock, including the countdown, timed rounds, pause, restart, reroll, resize, stats reset and Ctrl+C.
+
+## Timed and untimed rounds
+
+A round's gameplay deadline is `SessionConfig.durationMs: number | null`; `null` means untimed. It flows unchanged into `GameContext.durationMs`, and `BaseGame` only ends a round with `'time'` when there is a deadline. `GameInstance.timeLeftMs()` returns `null` for untimed rounds, and the HUD shows "NO TIMER" instead of a countdown. The frame loop, `update(dt)` and animations run the same either way. Only the deadline is optional.
+
+- Games declare `untimed: true` when they can be played without a deadline, and optionally `modeNames` (Ski Survival: *Survival Sprint* / *Endless Mountain*). Games that ramp difficulty by elapsed time use `rampProgress(untimedRampMs)`: timed rounds ramp over their duration, untimed ones over a fixed span. Bug Bash replaces the clock with lives when untimed.
+- `generateSession({ untimed })` never consumes randomness for timing, so a seed reproduces the same round in both modes. Requests that can't be honoured (the daily, custom games) fall back to timed with a `timingNote` shown in the briefing.
+- The preference lives in `settings.timing`. Untimed results go to `save.untimedScores` and history entries are tagged `untimed`, so timed records stay comparable.
+- Network timeouts (heartbeats, idle and hello timeouts, reconnect grace) live in `src/net` and know nothing about gameplay timing. `host --no-timer` only changes game options.
 
 ## Session generation
 

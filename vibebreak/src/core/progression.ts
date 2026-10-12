@@ -63,7 +63,9 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
   { id: 'terminal-veteran', name: 'Terminal Veteran', description: 'Reach level 10.', check: (c) => levelFromXp(c.save.xp) >= 10 },
   { id: 'combo-breaker', name: 'C-C-Combo', description: 'Reach a 20-hit combo in Bug Bash.', check: (c) => roundStat(c, 'bugbash', 'maxCombo') >= 20 },
   { id: 'snake-charmer', name: 'Snake Charmer', description: 'Grow the snake to length 20.', check: (c) => roundStat(c, 'snake', 'maxLength') >= 20 },
-  { id: 'touch-typist', name: 'Touch Typist', description: '60+ WPM at 95%+ accuracy in Code Sprint.', check: (c) => roundStat(c, 'codesprint', 'wpm') >= 60 && roundStat(c, 'codesprint', 'accuracy') >= 95 },
+  // Code Sprint's "Touch Typist" was retired with the game; old unlocks stay in the save file.
+  { id: 'black-diamond', name: 'Black Diamond', description: 'Ski 1,000m in one Ski Survival run.', check: (c) => roundStat(c, 'ski', 'distance') >= 1000 },
+  { id: 'big-air', name: 'Big Air', description: 'Land 3 tricks in one Ski Survival run.', check: (c) => roundStat(c, 'ski', 'tricks') >= 3 },
   { id: 'skyscraper', name: 'Skyscraper', description: 'Stack a tower 25 blocks high.', check: (c) => roundStat(c, 'stack', 'height') >= 25 },
   { id: 'published', name: 'npm publish', description: 'Escape the Dependency Dungeon.', check: (c) => roundStat(c, 'dungeon', 'escaped') >= 1 },
   { id: 'why-cross', name: 'Why Did It Cross the Road?', description: 'Hop 50 lanes in Crossy Prod.', check: (c) => roundStat(c, 'crossy', 'distance') >= 50 },
@@ -115,13 +117,15 @@ export function recordRound(
   now = new Date(),
 ): RoundSummary {
   const levelBefore = levelFromXp(save.xp);
-  const prev = save.highScores[def.id]?.score ?? null;
+  // Untimed rounds can run far longer, so they keep their own personal bests.
+  const bests = session.durationMs === null ? save.untimedScores : save.highScores;
+  const prev = bests[def.id]?.score ?? null;
   const newHighScore = result.score > 0 && (prev === null || result.score > prev);
 
   save.rounds++;
   save.playtimeMs += Math.max(0, Math.round(playedMs));
   save.lastGameId = def.id;
-  if (newHighScore) save.highScores[def.id] = { score: result.score, at: now.toISOString(), seed: session.seed };
+  if (newHighScore) bests[def.id] = { score: result.score, at: now.toISOString(), seed: session.seed };
 
   const gs = (save.gameStats[def.id] ??= { plays: 0, totals: {}, bests: {} });
   gs.plays++;
@@ -138,6 +142,7 @@ export function recordRound(
     modifierId: session.modifierId,
     difficulty: session.difficulty,
     ...(session.daily ? { daily: session.daily } : {}),
+    ...(session.durationMs === null ? { untimed: true } : {}),
   });
   if (save.history.length > 20) save.history.splice(0, save.history.length - 20);
 

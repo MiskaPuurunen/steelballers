@@ -19,7 +19,8 @@ export abstract class BaseGame implements GameInstance {
   protected readonly effects: Effects;
   protected readonly difficulty: Difficulty;
   protected readonly level: 0 | 1 | 2;
-  protected readonly durationMs: number;
+  /** Gameplay deadline, or null for an untimed round. */
+  protected readonly durationMs: number | null;
 
   protected elapsedMs = 0;
   protected endReason: EndReason | null = null;
@@ -60,8 +61,22 @@ export abstract class BaseGame implements GameInstance {
     return this.fb ? { text: this.fb.text, tone: this.fb.tone } : null;
   }
 
-  timeLeftMs(): number {
-    return Math.max(0, this.durationMs - this.elapsedMs);
+  /** True when the round has a gameplay deadline. */
+  get timed(): boolean {
+    return this.durationMs !== null;
+  }
+
+  timeLeftMs(): number | null {
+    return this.durationMs === null ? null : Math.max(0, this.durationMs - this.elapsedMs);
+  }
+
+  /**
+   * How far through its difficulty ramp the round is (0..1). Timed rounds
+   * ramp over their duration; untimed rounds over `untimedRampMs` of play,
+   * then stay at the top difficulty.
+   */
+  protected rampProgress(untimedRampMs: number): number {
+    return Math.min(1, this.elapsedMs / (this.durationMs ?? untimedRampMs));
   }
 
   isOver(): boolean {
@@ -85,7 +100,9 @@ export abstract class BaseGame implements GameInstance {
       this.fb.ttl -= dt;
       if (this.fb.ttl <= 0) this.fb = null;
     }
-    if (this.elapsedMs >= this.durationMs) {
+    // Only timed rounds have a deadline. Untimed rounds keep ticking (animation,
+    // physics, difficulty) and end on the game's own conditions or a quit.
+    if (this.durationMs !== null && this.elapsedMs >= this.durationMs) {
       this.end('time');
       return;
     }

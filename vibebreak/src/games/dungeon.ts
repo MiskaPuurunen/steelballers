@@ -284,7 +284,8 @@ export class DependencyDungeon extends BaseGame {
     }
     if (p.x === this.map.exit.x && p.y === this.map.exit.y) {
       if (this.packages >= this.packagesNeeded) {
-        const timeBonus = Math.floor(this.timeLeftMs() / 1000) * 5;
+        // Untimed rounds have no clock, so no time bonus.
+        const timeBonus = Math.floor((this.timeLeftMs() ?? 0) / 1000) * 5;
         const pts = this.addScore(300 + timeBonus + this.hp * 20);
         this.flash(`Published! +${pts}`, 'gold', 2000);
         this.end('win');
@@ -443,6 +444,7 @@ export const dungeonDef: GameDefinition = {
   ],
   weight: 2,
   defaultDurationSec: 60,
+  untimed: true,
   xpScale: 10,
   create: (ctx) => new DependencyDungeon(ctx),
 };

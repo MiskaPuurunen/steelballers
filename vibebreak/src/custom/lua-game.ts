@@ -156,7 +156,8 @@ export class LuaGame extends BaseGame {
       flash: (text, tone, ms) => this.flash(oneLine(text, 40), asTone(tone) ?? 'info', Math.min(5000, Math.max(100, ms))),
       finish: (reason) => this.end(reason === 'win' ? 'win' : 'gameover'),
       random: () => this.rng.next(),
-      timeLeft: () => this.timeLeftMs(),
+      // Custom games are always timed (see customGameDef); 0 is a safe fallback.
+      timeLeft: () => this.timeLeftMs() ?? 0,
       elapsed: () => this.elapsedMs,
       getScore: () => this.score,
     });
@@ -167,7 +168,7 @@ export class LuaGame extends BaseGame {
       this.vm.call(
         'ctx',
         this.difficulty,
-        `speed=${e.speed};special=${e.specialMult};penalty=${e.penaltyMult};score_mult=${e.scoreMult};chaos=${e.chaos};lives=${lives};duration=${this.durationMs}`,
+        `speed=${e.speed};special=${e.specialMult};penalty=${e.penaltyMult};score_mult=${e.scoreMult};chaos=${e.chaos};lives=${lives};duration=${this.durationMs ?? 0}`,
       );
       this.vm.call('init');
     } catch (err) {

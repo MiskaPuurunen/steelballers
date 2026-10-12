@@ -202,6 +202,7 @@ export const stackDef: GameDefinition = {
   ],
   weight: 2,
   defaultDurationSec: 45,
+  untimed: true,
   xpScale: 30,
   excludedModifiers: ['low-battery'],
   create: (ctx) => new StackOverflow(ctx),

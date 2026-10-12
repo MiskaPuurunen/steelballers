@@ -272,6 +272,7 @@ export const snakeDef: GameDefinition = {
   ],
   weight: 3,
   defaultDurationSec: 45,
+  untimed: true,
   xpScale: 15,
   // One crash ends the round, so mistake-based modifiers don't apply.
   excludedModifiers: ['low-battery', 'glass-cannon'],

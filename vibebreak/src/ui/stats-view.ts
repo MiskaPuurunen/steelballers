@@ -11,19 +11,24 @@ export function statsLines(save: SaveData, games: readonly GameDefinition[], wid
   const lines: string[] = [];
   lines.push(theme.title('STATS & ACHIEVEMENTS'));
   lines.push('');
-  lines.push(
-    theme.muted('LEVEL ') + c.bold(String(lp.level)) + '  ' + bar(lp.into / lp.needed, 20) + theme.muted(`  ${fmt(lp.into)}/${fmt(lp.needed)} XP`) +
-      theme.muted(`   total ${fmt(save.xp)} XP`),
-  );
-  lines.push(theme.muted(`${fmt(save.rounds)} round${save.rounds === 1 ? '' : 's'} played · ${fmtDuration(save.playtimeMs)} total playtime`));
+  const level = theme.muted('LEVEL ') + c.bold(String(lp.level)) + '  ' + bar(lp.into / lp.needed, compact ? 12 : 20) + theme.muted(`  ${fmt(lp.into)}/${fmt(lp.needed)} XP`);
+  const rounds = `${fmt(save.rounds)} round${save.rounds === 1 ? '' : 's'} played · ${fmtDuration(save.playtimeMs)}`;
+  // Compact (24-row terminals): one line for both.
+  if (compact) lines.push(level + theme.muted(`   ${rounds}`));
+  else {
+    lines.push(level + theme.muted(`   total ${fmt(save.xp)} XP`));
+    lines.push(theme.muted(`${rounds} total playtime`));
+  }
   lines.push('');
-  lines.push(theme.muted(padRight('GAME', 22) + padRight('BEST', 10) + padRight('PLAYS', 7) + 'HIGHLIGHT'));
+  lines.push(theme.muted(padRight('GAME', 20) + padRight('BEST', 9) + padRight('UNTIMED', 9) + padRight('PLAYS', 7) + 'HIGHLIGHT'));
   for (const g of games) {
     const hs = save.highScores[g.id];
+    const un = save.untimedScores[g.id];
     const gs = save.gameStats[g.id];
     const highlight = gs ? gameHighlight(g.id, gs.bests, gs.totals) : theme.muted('not played yet');
     lines.push(
-      padRight(theme.primary(g.name), 22) + padRight(hs ? c.bold(fmt(hs.score)) : theme.muted('-'), 10) + padRight(String(gs?.plays ?? 0), 7) + highlight,
+      padRight(theme.primary(g.name), 20) + padRight(hs ? c.bold(fmt(hs.score)) : theme.muted('-'), 9) +
+        padRight(un ? c.bold(fmt(un.score)) : theme.muted('-'), 9) + padRight(String(gs?.plays ?? 0), 7) + highlight,
     );
   }
   const today = save.daily[todayUtc()];
@@ -87,7 +92,7 @@ function gameHighlight(id: string, bests: Record<string, number>, totals: Record
   switch (id) {
     case 'bugbash': return theme.muted(`best combo ${b('maxCombo')}`);
     case 'snake': return theme.muted(`longest snake ${b('maxLength')}`);
-    case 'codesprint': return theme.muted(`top speed ${b('wpm')} wpm`);
+    case 'ski': return theme.muted(`farthest ${b('distance')}m`);
     case 'stack': return theme.muted(`tallest tower ${b('height')}`);
     case 'dungeon': return theme.muted(`escapes ${fmt(totals.escaped ?? 0)}`);
     case 'tetris': return theme.muted(`most lines ${b('lines')}`);

@@ -136,7 +136,7 @@ describe('theme setting and the THEMES screen', () => {
 
   it('old saves get the classic theme with animations on; junk is rejected', () => {
     const base = { version: 1, settings: { color: 'auto' } };
-    expect(normalizeSave(base).settings).toEqual({ color: 'auto', theme: 'classic', animations: true });
+    expect(normalizeSave(base).settings).toEqual({ color: 'auto', theme: 'classic', animations: true, timing: 'timed' });
     expect(normalizeSave({ ...base, settings: { theme: '../../etc', animations: 'yes' } }).settings).toMatchObject({ theme: 'classic', animations: true });
     expect(normalizeSave({ ...base, settings: { theme: 'halloween', animations: false } }).settings).toMatchObject({ theme: 'halloween', animations: false });
   });

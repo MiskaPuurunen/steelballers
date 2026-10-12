@@ -98,6 +98,20 @@ describe('multi-process LAN matches', () => {
     expect(c.out()).toMatch(/Nothing is accepting connections at 127\.0\.0\.1:\d+/);
   }, 30_000);
 
+  it('host --no-timer turns off optional game timers only, and the console closes it', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-mp-'));
+    const port = await freePort();
+    const host = cli(['host', '--dedicated', '--local', '--port', String(port), '--game', 'battleship', '--no-timer'], home);
+    await waitForText(host.out, /Room \w{4} is open/);
+    expect(host.out()).toMatch(/turn timer and placement timer off/);
+    host.p.stdin!.write('status\nclose\n');
+    expect(await host.exit).toBe(0);
+    const pp = cli(['host', '--dedicated', '--local', '--port', String(port), '--game', 'prompt-panic', '--no-timer'], home);
+    await waitForText(pp.out, /timers are part of the game rules and stay on/);
+    pp.p.stdin!.write('close\n');
+    expect(await pp.exit).toBe(0);
+  }, 30_000);
+
   it('rejects bad CLI input with helpful messages', async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-mp-'));
     const bad = cli(['host', '--game', 'chess', '--dedicated'], home);

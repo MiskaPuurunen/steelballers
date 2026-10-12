@@ -4,11 +4,12 @@
 
 VibeBreak is a terminal arcade for developers who work with AI coding agents like Claude Code and Codex. While the agent writes, debugs or refactors, you play a 20–60 second keyboard game in your terminal instead of opening social media. When the round ends you get your score, some XP, and a one-key exit back to work.
 
-- **7 minigames:** Bug Bash, Terminal Snake, Code Sprint, Stack Overflow, Dependency Dungeon, Crossy Prod and Tetris.
+- **7 minigames:** Bug Bash, Terminal Snake, Ski Survival, Stack Overflow, Dependency Dungeon, Crossy Prod and Tetris.
+- **Timed or untimed:** every built-in game can be played without a countdown (`--no-timer`, or **[T] TIMER** in the menu). Untimed rounds end on game over or when you choose to stop.
 - **Random sessions:** each round rolls a game, a difficulty and a modifier such as *Overclocked*, *Glass Cannon* or *Chaos Mode*. Runs are seeded, so any session can be replayed exactly.
 - **Daily challenge:** one seed per day, the same for everyone, with a share card you can paste.
 - **LAN multiplayer:** host a lobby, friends join from their own terminals on the same network. **Battleship** (versus), **Prompt Panic** (write the funniest answer, vote anonymously) and **Doodle Protocol** (ASCII draw-and-guess), or a random **Party Mix**. Server-authoritative, no accounts, no internet. See [docs/LAN.md](docs/LAN.md).
-- **Progression:** high scores, XP, levels and 19 achievements. All of it is stored locally, with no account and no telemetry.
+- **Progression:** high scores, XP, levels and 20 achievements. All of it is stored locally, with no account and no telemetry.
 - **Optional Claude Code integration:** a status line shows what Claude is doing (thinking, running a tool, waiting for you, done) while you play, per session, with how fresh the information is.
 - **Themes:** Classic, Christmas, Halloween, Frutiger Aero, Synthwave, Matrix and Amber CRT, plus a Seasonal option that switches by date. Each theme recolours the whole arcade and adds its own ambient effects (snow, bats, bubbles, digital rain…) around the menus.
 - **Custom games:** write your own minigame in Lua, paste it or load the file from the menu, and play it like a built-in one. Scripts run in a sandbox.
@@ -30,6 +31,7 @@ YOUR AI IS THINKING. YOU'RE PLAYING._
    [4] STATS & ACHIEVEMENTS
    [5] THEMES
    [6] CUSTOM GAMES
+   [T] TIMER: ON
    [H] HOST LAN GAME
    [J] JOIN LAN GAME
    [P] PARTY MODE
@@ -83,8 +85,11 @@ Use a global install for the hook setup. `npx` runs from a temporary cache, so t
 |---|---|
 | `vibebreak` | Open the arcade menu |
 | `vibebreak play` | Start a random minigame right away (a short briefing counts down first) |
-| `vibebreak play --game snake` | Play a specific game: `bugbash`, `snake`, `codesprint`, `stack`, `dungeon`, `crossy`, `tetris` |
+| `vibebreak play --game snake` | Play a specific game: `bugbash`, `snake`, `ski`, `stack`, `dungeon`, `crossy`, `tetris` |
 | `vibebreak play --duration 30` | Set the round's time limit in seconds (15–300) |
+| `vibebreak play --game snake --no-timer` | Untimed round: no countdown, play until game over or Esc (`--untimed` works too) |
+| `vibebreak play --game ski --mode endless` | Ski Survival's Endless Mountain (`--mode sprint` = Survival Sprint, timed) |
+| `vibebreak play --timer` | Force a timed round when your saved preference is untimed |
 | `vibebreak play --random --duration 30` | Explicit random game (`play` is random by default) |
 | `vibebreak play --seed K7Q2-M9XA` | Replay an exact session |
 | `vibebreak play --modifier chaos --difficulty hard` | Force a modifier and/or difficulty |
@@ -104,7 +109,7 @@ Use a global install for the hook setup. `npx` runs from a temporary cache, so t
 | `vibebreak host --dedicated` | Headless LAN server with a text console (no TTY needed) |
 | `vibebreak --help` / `--version` | Usage / version |
 
-**What `--duration` means:** it sets the round's maximum length. A round can end sooner, for example when the snake crashes or the tower topples. The HUD timer turns yellow at 10 seconds left, and the last 5 seconds are counted down on screen, so a round never stops without warning. Each game has its own default (30–60s). The daily challenge always uses the default so scores can be compared.
+**What `--duration` means:** in a timed round it sets the maximum length (it can't be combined with `--no-timer`). A round can end sooner, for example when the snake crashes or the tower topples. The HUD timer turns yellow at 10 seconds left, and the last 5 seconds are counted down on screen, so a round never stops without warning. Each game has its own default (30–60s). The daily challenge always uses the default so scores can be compared.
 
 ### Controls that work everywhere
 
@@ -124,8 +129,26 @@ A 3×3 grid laid out like your keyboard's left hand: **Q W E / A S D / Z X C** (
 ### Terminal Snake: arcade classic (45s)
 Steer with **arrows, WASD or HJKL**. Eat `<>` to grow. Bonus `$$` food appears now and then and fades after 5 seconds. Boards are generated at random as *open*, *pillars*, *walls* or *cross*, and every layout is checked with a flood fill so the whole board is reachable. Speed increases with each bite. Turn presses are buffered (up to 2) and reversals are ignored, so a fast double-tap does what you meant.
 
-### Code Sprint: typing under pressure (30s)
-Type programming snippets as fast and cleanly as you can: Git commands, shell one-liners, SQL, JS/TS/Python/Rust fragments and dev vocabulary. Characters you typed correctly turn green and mistakes turn red. Fix mistakes with Backspace. The HUD tracks live WPM and accuracy. Clean snippets earn ×1.5 and golden snippets ×2. Snippets get longer as you progress. **All challenge text is inert:** it is compared character by character and is never parsed or executed (a test enforces this).
+### Ski Survival: downhill survival (60s, or endless)
+Race down an endless, procedurally generated mountain. The slope scrolls toward your skier `S`. Dodge trees `T`, rocks `O` and snowmen `8`. Moguls `~` slow you down. Jump over rocks and crevasses `X`, hit ramps `^` for big air, and collect ski tokens `*`, gold `$` and hot cocoa `+` (an extra life).
+
+| Key | Action |
+|---|---|
+| `A`/`D` or `←`/`→` | Carve left / right |
+| `W` or `↑` | Jump. In big air off a ramp: **Spin** trick |
+| `S` or `↓` | Tuck: faster, 2× distance points. In big air: **Grab** trick |
+| `Space` | Brake |
+| `P` / `R` / `Q` | Pause / restart / end the run (`Esc` also pauses) |
+
+- **Lives:** you have 3 lives (Low Battery: 3, up to 5 with cocoa). A wipeout costs a life and 40 points, slows you down and gives 1.5 s of invincibility. Trees and snowmen are tall, so they hit you even mid-jump. Landing on a crevasse is fatal, whatever lives you have left.
+- **Scoring:** 1 point per metre (2 while tucked), plus 25 per token, 100 per gold token, 15 for jumping a rock, 25 for clearing a crevasse and 50 for big air. Each trick is worth 100 when you land cleanly, doubled if you land two in one jump. A crash in the air loses the tricks.
+- **Difficulty:** speed and obstacle density rise with distance. Snowmen, moguls, ramps and finally crevasses (from 150–400 m depending on difficulty) appear as you go.
+- **Fair by design:** the generator always keeps a safe line, 3 columns wide and drifting at most one column per row, free of anything that can hurt you, so there is never an unavoidable wall. Top speed is capped so you always get at least ~0.65 s to react. Tests check this across thousands of generated rows, and an autopilot skis 20 minutes on Hard without a crash.
+- **Two modes:**
+  - **Survival Sprint** (timed, 60 s by default): score as much as you can before time runs out.
+  - **Endless Mountain** (untimed): no countdown, ever. You ski until you run out of lives, fall into a crevasse or quit. Distance, speed, lives and your best stay on screen.
+
+  Pick the mode with `T` in the briefing, `--mode sprint|endless`, or the **[T] TIMER** menu.
 
 ### Stack Overflow: timing & precision (45s)
 A block slides back and forth. Press **Space** to drop it. Any overhang is sliced off, so the platform shrinks. A perfect drop keeps the block's full width, and three perfect drops in a row grow it back by one. The round ends if a block misses the tower completely. On Easy, a drop that is off by one cell still counts as perfect.
@@ -218,9 +241,23 @@ function render() return { "Press Space!", "", "Presses: " .. presses } end
 
 Scripts are untrusted, so they run in a sandbox: Lua 5.4 in WebAssembly with no file, OS, network or terminal access, a per-call time budget, a memory cap, and sanitized output. Custom games don't give XP or achievements and never show up in Quick Play or the daily challenge; your best score for each is kept. See [docs/CUSTOM_GAMES.md](docs/CUSTOM_GAMES.md) for the full API.
 
+## Timed and untimed play
+
+Every round is either **timed** (the default: a gameplay countdown, 30–90 s depending on the game) or **untimed** (no gameplay deadline at all).
+
+- **How to choose:** `vibebreak play --no-timer` (or `--mode endless`), **[T] TIMER** in the menu (saved as your default for Quick Play, the arcade and replays), or `T` on the briefing screen to flip just that round. `--timer` forces a timed round.
+- **What untimed means:** there is no countdown and nothing in the HUD counting down ("NO TIMER" instead). Nothing ends because time ran out, and no points are given or taken for time spent. The game keeps animating and updating. Rounds end on the game's own conditions (crash, top-out, lives, escape) or when you press Esc and choose *End round*. Pause, restart and `Ctrl+C` work as always.
+- **Supported games:** all seven built-in games.
+  - Snake, Stack Overflow, Dependency Dungeon (no escape time bonus untimed), Crossy Prod, Tetris and Ski Survival (Endless Mountain) end on their usual game over.
+  - **Bug Bash** has no natural end, so untimed it gives you 5 lives instead of a clock, and misses cost points but not time.
+- **Not untimed:** custom Lua games and the **daily challenge** are always timed, so daily scores stay comparable. Asking for untimed there shows a note and plays timed.
+- **Fair scoring:** untimed rounds keep **separate personal bests** (the UNTIMED column in `vibebreak stats`), so an endless run never replaces a timed record. XP per round is capped the same way for both. Modifiers are rolled identically for timed and untimed rounds, and a seed reproduces the same round either way.
+- **Multiplayer:** `vibebreak host --no-timer` turns off only optional gameplay timers (Battleship's turn and placement timers). Prompt Panic and Doodle Protocol timers are part of their rules and stay on.
+- **Gameplay deadlines vs. network timeouts:** these are separate. Network heartbeats, connection timeouts and the reconnect grace period are never affected by any timer setting, so a dead connection is still detected in an untimed LAN game (a test checks this).
+
 ## Random sessions and modifiers
 
-Every round rolls a **game** (weighted, never the same game twice in a row), a **difficulty** (Easy / Normal / Hard), a **modifier** and game-specific content such as layouts, spawn timing, snippet order and dungeon maps. The briefing screen shows all of it, including the seed, before play starts. Press `R` to reroll.
+Every round rolls a **game** (weighted, never the same game twice in a row), a **difficulty** (Easy / Normal / Hard), a **modifier** and game-specific content such as layouts, spawn timing, mountain slopes and dungeon maps. The briefing screen shows all of it, including the seed, before play starts. Press `R` to reroll.
 
 | Modifier | Effect |
 |---|---|
@@ -230,7 +267,7 @@ Every round rolls a **game** (weighted, never the same game twice in a row), a *
 | Low Battery | Only 3 mistakes allowed, points ×1.2 |
 | Double XP | 2× XP for the round |
 | Glass Cannon | Points ×1.5, mistakes hurt 2× |
-| Chaos Mode | A random mix of the above, plus surprise events (swarms, the snake's food relocating, CAPS LOCK snippets, speed glitches, merge-conflict spawns) |
+| Chaos Mode | A random mix of the above, plus surprise events (swarms, the snake's food relocating, gusts of wind on the ski slope, speed glitches, merge-conflict spawns) |
 
 Games can exclude modifiers that make no sense for them. Snake, for example, never rolls Low Battery, because one crash already ends the round.
 
@@ -238,9 +275,9 @@ Seeds are fully deterministic: `vibebreak play --seed K7Q2-M9XA` reproduces the 
 
 ## Progression
 
-- High score per game, plus game-specific personal bests (best combo, longest snake, top WPM, tallest tower, dungeon escapes, farthest crossing, most lines).
+- High score per game, plus game-specific personal bests (best combo, longest snake, farthest ski run, tallest tower, dungeon escapes, farthest crossing, most lines).
 - XP comes from score (normalised per game), with bonuses for perfect rounds, new personal bests and the daily challenge. XP per round is capped, so skill matters more than grinding.
-- 19 achievements (4 for LAN games), including *Back to Work*: finish a round and quit straight back to your code. Leaving is rewarded on purpose.
+- 20 achievements (4 for LAN games, 2 for Ski Survival; Code Sprint's *Touch Typist* was retired, but existing unlocks stay in your save), including *Back to Work*: finish a round and quit straight back to your code. Leaving is rewarded on purpose.
 - Nothing decays and there are no streak-loss mechanics. Stopping costs you nothing.
 
 ## Save file and configuration
@@ -371,7 +408,7 @@ Auto-launch is opt-in because it moves keyboard focus. The status beacon on its 
 ```bash
 npm install
 npm run dev              # run from source (tsx)
-npm test                 # vitest: 324 tests (incl. real TCP and multi-process LAN matches)
+npm test                 # vitest: 361 tests (incl. real TCP and multi-process LAN matches)
 npm run typecheck
 npm run build            # compile to dist/
 python3 scripts/pty-smoke.py   # real-terminal smoke test (needs: pip install pyte; npm run build)

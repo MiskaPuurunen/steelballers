@@ -64,7 +64,7 @@ describe('Bug Bash', () => {
     g.handleInput(ch('e'));
     expect(g.combo).toBe(0);
     expect(g.mistakes).toBe(1);
-    expect(before - g.timeLeftMs()).toBe(1500);
+    expect(before! - g.timeLeftMs()!).toBe(1500);
   });
 
   it('squashing a feature is penalised', () => {

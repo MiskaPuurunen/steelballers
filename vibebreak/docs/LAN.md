@@ -109,7 +109,7 @@ end | lobby | rematch | next
 close                  close the lobby and exit
 ```
 
-`--autostart <n>` starts automatically when n players are ready, and `--matches <n>` exits after n matches. After each match the host prints a machine-readable `RESULT {...}` line.
+`--no-timer` turns off Battleship's optional turn and placement timers. It doesn't change Prompt Panic or Doodle Protocol, whose timers are part of the game, and it never changes network timeouts. `--autostart <n>` starts automatically when n players are ready, and `--matches <n>` exits after n matches. After each match the host prints a machine-readable `RESULT {...}` line.
 
 ### Options from the command line
 

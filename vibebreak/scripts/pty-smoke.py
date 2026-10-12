@@ -107,10 +107,19 @@ save = json.load(open(os.path.join(home, 'save.json')))
 check(save['rounds'] == 1, 'one round recorded')
 check('back-to-work' in save['achievements'], 'Back to Work achievement on quit')
 
+print('play --game snake --no-timer')
+s = Session(['play', '--game', 'snake', '--no-timer', '--seed', 'SMOKE-U'], home)
+s.pump(0.8)
+check(s.has('Timer') and s.has('none'), 'untimed: briefing says there is no timer', s)
+s.send('\r', 0.6)
+check(s.has('NO TIMER') and not s.has('TIME 0:'), 'untimed: HUD has no countdown', s)
+s.send('\x03', 0.3)
+check(s.wait_exit() == 0, 'untimed: Ctrl+C exits cleanly')
+
 for game, keys in [
     ('bugbash', 'qweasdzxc' * 3),
     ('snake', ['\x1b[B', '\x1b[C', '\x1b[A']),
-    ('codesprint', 'git status'),
+    ('ski', ['a', 'a', '\x1b[C', 'w', 's', ' ']),
     ('stack', '    '),
     ('dungeon', ['\x1b[C', '\x1b[C', '\x1b[B', 'd', 'd', 's']),
     ('crossy', ['\x1b[A', 'w', 'a', 'd']),

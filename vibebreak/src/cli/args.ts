@@ -39,6 +39,8 @@ export interface ParsedArgs {
   spectate: boolean;
   /** LAN host: accept connections from non-private addresses. */
   allowPublic: boolean;
+  /** play: --no-timer / --timer / --mode. Undefined = use the saved preference. */
+  timing?: 'timed' | 'untimed';
   /** LAN host: run a headless server with a text console (no TTY needed). */
   dedicated: boolean;
   /** LAN join: play automatically (for testing and demos). */
@@ -131,6 +133,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
         case '--party': out.party = true; break;
         case '--spectate': out.spectate = true; break;
         case '--allow-public': out.allowPublic = true; break;
+        case '--no-timer': case '--untimed': case '--timer': case '--timed': case '--mode': {
+          let t: 'timed' | 'untimed' | undefined;
+          if (flag === '--mode') {
+            const v = takeValue(flag, inline)?.toLowerCase();
+            if (v === 'timed' || v === 'sprint' || v === 'survival-sprint') t = 'timed';
+            else if (v === 'untimed' || v === 'endless' || v === 'endless-mountain') t = 'untimed';
+            else if (v !== undefined) out.error ??= `Invalid mode "${v}" (sprint/timed or endless/untimed)`;
+          } else t = flag === '--no-timer' || flag === '--untimed' ? 'untimed' : 'timed';
+          if (t && out.timing && out.timing !== t) out.error ??= 'Conflicting options: a round is either timed or untimed';
+          if (t) out.timing = t;
+          break;
+        }
         case '--dedicated': out.dedicated = true; break;
         case '--bot': out.bot = true; break;
         case '--set': {
@@ -182,7 +196,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   // A specific game implies play.
-  if (out.command === 'menu' && (out.game || out.random || out.seed || out.duration !== undefined)) out.command = 'play';
+  if (out.command === 'menu' && (out.game || out.random || out.seed || out.duration !== undefined || out.timing)) out.command = 'play';
+  if (out.timing === 'untimed' && out.duration !== undefined) out.error ??= '--duration sets a time limit, so it cannot be combined with --no-timer';
   return out;
 }
 
@@ -193,6 +208,8 @@ Usage:
   vibebreak play                 Jump straight into a random minigame
   vibebreak play --game snake    Play a specific game
   vibebreak play --duration 30   Set the round time limit in seconds (15-300)
+  vibebreak play --game snake --no-timer   No countdown: play until game over (or Esc)
+  vibebreak play --game ski --mode endless Ski Survival's Endless Mountain (--mode sprint = timed)
   vibebreak play --seed K7Q2-M9XA  Replay an exact session
   vibebreak daily                Today's seeded challenge (same for everyone)
   vibebreak list                 List the games
@@ -212,10 +229,10 @@ LAN multiplayer (same network, no internet or accounts needed):
   vibebreak join 192.168.1.42    Join a host (also host:port, or --port 7777)
   vibebreak join                 Browse rooms on your network, or type an address
   vibebreak rooms [--json]       List VibeBreak rooms on your network
-  In the menu: [H] host, [J] join, [P] party mode.
+  In the menu: [H] host, [J] join, [P] party mode. [T] sets timed or untimed rounds.
 
 Options:
-  -g, --game <id>        bugbash | snake | codesprint | stack | dungeon | crossy | tetris
+  -g, --game <id>        bugbash | snake | ski | stack | dungeon | crossy | tetris
   -d, --duration <sec>   Round time limit. A round may end sooner (e.g. game over);
                          the HUD warns you during the final 10 seconds.
   -s, --seed <seed>      Reproduce a session (game, modifier, layout, sequence)
@@ -225,6 +242,10 @@ Options:
   -t, --theme <id>       classic | christmas | halloween | frutiger-aero | synthwave |
                          matrix | amber | seasonal (this run only; "vibebreak theme" saves it)
   -r, --random           Random game (the default for play)
+      --no-timer         Untimed round: no gameplay countdown (alias --untimed). The daily
+                         is always timed. With "host": turns off optional LAN game timers
+      --timer            Timed round, even if your saved preference is untimed
+      --mode <m>         sprint | endless (also timed | untimed)
       --no-color         Disable colours (NO_COLOR is also respected)
 
 LAN options:

@@ -39,6 +39,10 @@ const SPAWN_MS = [1100, 850, 650];
 const LIFE_MS = [2300, 1750, 1300];
 const MAX_ACTIVE = [2, 3, 4];
 
+/** Untimed rounds: lives instead of a clock, and the difficulty ramp takes a minute. */
+const UNTIMED_LIVES = 5;
+const UNTIMED_RAMP_MS = 60_000;
+
 export class BugBash extends BaseGame {
   readonly minSize = { width: 46, height: 17 };
 
@@ -57,7 +61,15 @@ export class BugBash extends BaseGame {
   }
 
   private progress(): number {
-    return Math.min(1, this.elapsedMs / this.durationMs);
+    return this.rampProgress(UNTIMED_RAMP_MS);
+  }
+
+  /**
+   * Mistakes allowed before game over: the modifier's limit, or a fixed
+   * number in untimed rounds (Bug Bash has no other way to end).
+   */
+  private get lives(): number | null {
+    return this.livesOr(this.timed ? null : UNTIMED_LIVES);
   }
 
   private spawnInterval(): number {
@@ -121,7 +133,7 @@ export class BugBash extends BaseGame {
   }
 
   private checkLives(): void {
-    const lives = this.effects.lives;
+    const lives = this.lives;
     if (lives !== null && this.mistakes + this.escaped >= lives) this.end('gameover');
   }
 
@@ -159,9 +171,13 @@ export class BugBash extends BaseGame {
       this.flash(`You squashed a feature! -${lost}`, 'bad', 900);
     } else {
       const lost = this.penalize(50);
-      // Wrong inputs also cost time.
-      this.elapsedMs = Math.min(this.durationMs, this.elapsedMs + 1500 * this.effects.penaltyMult);
-      this.flash(`Miss! -${lost}  -${(1.5 * this.effects.penaltyMult).toFixed(1)}s`, 'bad', 700);
+      if (this.durationMs !== null) {
+        // Wrong inputs also cost time (untimed rounds have no clock to take from).
+        this.elapsedMs = Math.min(this.durationMs, this.elapsedMs + 1500 * this.effects.penaltyMult);
+        this.flash(`Miss! -${lost}  -${(1.5 * this.effects.penaltyMult).toFixed(1)}s`, 'bad', 700);
+      } else {
+        this.flash(`Miss! -${lost}`, 'bad', 700);
+      }
     }
     this.checkLives();
   }
@@ -214,8 +230,8 @@ export class BugBash extends BaseGame {
     const items: HudItem[] = [
       { label: 'COMBO', value: `${this.combo} (x${comboMultiplier(this.combo)})`, tone: this.combo >= 5 ? 'gold' : 'info' },
     ];
-    if (this.effects.lives !== null) {
-      const left = Math.max(0, this.effects.lives - this.mistakes - this.escaped);
+    if (this.lives !== null) {
+      const left = Math.max(0, this.lives - this.mistakes - this.escaped);
       items.push({ label: 'LIVES', value: '<3 '.repeat(left).trim() || '-', tone: left <= 1 ? 'bad' : 'good' });
     }
     return items;
@@ -259,6 +275,8 @@ export const bugBashDef: GameDefinition = {
   ],
   weight: 3,
   defaultDurationSec: 30,
+  // Untimed: 5 mistakes or escapes end the round.
+  untimed: true,
   xpScale: 120,
   create: (ctx) => new BugBash(ctx),
 };

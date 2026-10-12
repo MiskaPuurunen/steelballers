@@ -465,6 +465,7 @@ export const tetrisDef: GameDefinition = {
   ],
   weight: 3,
   defaultDurationSec: 90,
+  untimed: true,
   xpScale: 40,
   // No lives or penalties in Tetris: mistakes are punished by the stack itself.
   excludedModifiers: ['low-battery', 'glass-cannon'],

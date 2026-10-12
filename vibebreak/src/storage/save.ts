@@ -24,6 +24,8 @@ export interface HistoryEntry {
   modifierId: string;
   difficulty: string;
   daily?: string;
+  /** Played without a gameplay deadline. */
+  untimed?: boolean;
 }
 
 export interface DailyRecord {
@@ -41,6 +43,8 @@ export interface Settings {
   animations: boolean;
   /** Display name for LAN games (remembered between sessions). */
   lanName?: string;
+  /** Default for Quick Play, the arcade and replays: timed rounds or no gameplay deadline. */
+  timing: 'timed' | 'untimed';
 }
 
 /** LAN multiplayer record (local only: results as reported by the host you played on). */
@@ -64,6 +68,8 @@ export interface SaveData {
   daily: Record<string, DailyRecord>;
   /** Best scores for user-made Lua games, kept apart from the built-in ones. */
   customScores: Record<string, { score: number; at: string; seed: string }>;
+  /** Personal bests from untimed rounds, kept apart so endless runs never replace timed bests. */
+  untimedScores: Record<string, { score: number; at: string; seed: string }>;
   settings: Settings;
   lan: LanStats;
 }
@@ -82,7 +88,8 @@ export function defaultSave(now = new Date()): SaveData {
     lastGameId: null,
     daily: {},
     customScores: {},
-    settings: { color: 'auto', theme: 'classic', animations: true },
+    untimedScores: {},
+    settings: { color: 'auto', theme: 'classic', animations: true, timing: 'timed' },
     lan: { matches: 0, wins: 0, games: {} },
   };
 }
@@ -145,6 +152,7 @@ export function normalizeSave(raw: unknown): SaveData {
         modifierId: String(h.modifierId ?? 'standard'),
         difficulty: String(h.difficulty ?? 'normal'),
         ...(typeof h.daily === 'string' ? { daily: h.daily } : {}),
+        ...(h.untimed === true ? { untimed: true } : {}),
       }))
       .slice(-20);
   }
@@ -170,6 +178,14 @@ export function normalizeSave(raw: unknown): SaveData {
   }
   if (isObj(raw.settings) && typeof raw.settings.animations === 'boolean') s.settings.animations = raw.settings.animations;
   if (isObj(raw.settings) && typeof raw.settings.lanName === 'string' && raw.settings.lanName.length <= 64) s.settings.lanName = raw.settings.lanName;
+  if (isObj(raw.settings) && (raw.settings.timing === 'timed' || raw.settings.timing === 'untimed')) s.settings.timing = raw.settings.timing;
+  if (isObj(raw.untimedScores)) {
+    for (const [k, v] of Object.entries(raw.untimedScores).slice(0, 100)) {
+      if (isObj(v) && typeof v.score === 'number' && Number.isFinite(v.score)) {
+        s.untimedScores[k] = { score: v.score, at: String(v.at ?? ''), seed: String(v.seed ?? '') };
+      }
+    }
+  }
   if (isObj(raw.lan)) {
     s.lan = { matches: num(raw.lan.matches), wins: num(raw.lan.wins), games: {} };
     if (isObj(raw.lan.games)) {

@@ -400,6 +400,7 @@ export const crossyDef: GameDefinition = {
   ],
   weight: 3,
   defaultDurationSec: 45,
+  untimed: true,
   xpScale: 15,
   // One hit ends the round, so mistake-based modifiers don't apply.
   excludedModifiers: ['low-battery', 'glass-cannon'],

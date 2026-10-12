@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import readline from 'node:readline';
 import { HELP, parseArgs, type ParsedArgs } from './args.js';
-import { GAMES, findGame } from '../games/index.js';
+import { GAMES, RETIRED_GAMES, findGame } from '../games/index.js';
 import { MODIFIERS } from '../core/modifiers.js';
 import { SaveStore, configDir, savePath } from '../storage/save.js';
 import { App, type StartMode } from '../ui/app.js';
@@ -141,7 +141,7 @@ function list(): number {
   out(theme.title('VIBEBREAK GAMES'));
   out();
   for (const g of GAMES) {
-    out(padRight(theme.primary(c.bold(g.id)), 14) + padRight(g.name, 22) + theme.muted(`${g.genre}, ${g.defaultDurationSec}s`));
+    out(padRight(theme.primary(c.bold(g.id)), 14) + padRight(g.name, 22) + theme.muted(`${g.genre}, ${g.defaultDurationSec}s${g.untimed ? ' or untimed' : ''}`) + (g.modeNames ? theme.muted(` (${g.modeNames.timed} / ${g.modeNames.untimed})`) : ''));
     out(' '.repeat(14) + theme.muted(g.tagline));
   }
   out();
@@ -322,6 +322,19 @@ function hostStart(args: ParsedArgs, savedName: string | undefined): LanStart | 
     }
     options = resolveOptions(def, options);
   }
+  if (args.timing === 'untimed') {
+    // Only optional gameplay timers are switched off. Network heartbeats,
+    // connection timeouts and reconnect windows are not gameplay and stay on.
+    const def = gameId && gameId !== RANDOM_GAME ? findMpGame(gameId) : undefined;
+    const optional = def ? def.options.filter((o) => o.unit === 's' && o.values.includes(0)) : [];
+    if (def && optional.length) {
+      options = resolveOptions(def, { ...(options ?? {}), ...Object.fromEntries(optional.map((o) => [o.key, 0])) });
+      err(`vibebreak: --no-timer: ${optional.map((o) => o.label.toLowerCase()).join(' and ')} off.`);
+    } else {
+      err(`vibebreak: --no-timer: ${def ? `${def.name}'s` : "party games'"} timers are part of the game rules and stay on.` +
+        ' (Network timeouts are never affected.)');
+    }
+  }
   const prompts: CustomPrompt[] = [];
   const dirPacks = loadPackDir(path.join(configDir(), 'prompt-packs'));
   const filePacks = args.packs.map((f) => loadPackFile(f));
@@ -372,6 +385,27 @@ async function rooms(args: ParsedArgs): Promise<number> {
 }
 
 async function play(args: ParsedArgs, store: SaveStore, loaded: ReturnType<SaveStore['load']>, lan?: LanStart): Promise<number> {
+  if (!lan && args.game && !findGame(args.game)) {
+    const retired = RETIRED_GAMES[args.game.toLowerCase()];
+    err(`vibebreak: ${retired ?? `unknown game "${args.game}".`} Available: ${GAMES.map((g) => g.id).join(', ')}`);
+    return 2;
+  }
+  if (!lan && args.timing === 'untimed') {
+    if (args.command === 'daily') {
+      err('vibebreak: the daily challenge is always timed so everyone plays the same round. Drop --no-timer.');
+      return 2;
+    }
+    const def = args.game ? findGame(args.game) : undefined;
+    if (def && !def.untimed) {
+      err(`vibebreak: ${def.name} has no untimed mode. Untimed games: ${GAMES.filter((g) => g.untimed).map((g) => g.id).join(', ')}`);
+      return 2;
+    }
+  }
+  if (!lan && args.modifier && !MODIFIERS.some((m) => m.id === args.modifier)) {
+    err(`vibebreak: unknown modifier "${args.modifier}". Available: ${MODIFIERS.map((m) => m.id).join(', ')}`);
+    return 2;
+  }
+
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     err('vibebreak: the arcade needs an interactive terminal (TTY).');
     if (lan?.mode === 'host') err('For a headless server use: vibebreak host --dedicated');
@@ -379,15 +413,6 @@ async function play(args: ParsedArgs, store: SaveStore, loaded: ReturnType<SaveS
     else err('Try "vibebreak list" or "vibebreak stats" for non-interactive output.');
     return 1;
   }
-  if (!lan && args.game && !findGame(args.game)) {
-    err(`vibebreak: unknown game "${args.game}". Available: ${GAMES.map((g) => g.id).join(', ')}`);
-    return 2;
-  }
-  if (!lan && args.modifier && !MODIFIERS.some((m) => m.id === args.modifier)) {
-    err(`vibebreak: unknown modifier "${args.modifier}". Available: ${MODIFIERS.map((m) => m.id).join(', ')}`);
-    return 2;
-  }
-
   let start: StartMode;
   if (lan) start = { mode: 'lan', lan };
   else if (args.command === 'daily') start = { mode: 'daily' };
@@ -400,6 +425,7 @@ async function play(args: ParsedArgs, store: SaveStore, loaded: ReturnType<SaveS
         ...(args.duration !== undefined ? { durationSec: args.duration } : {}),
         ...(args.difficulty ? { difficulty: args.difficulty } : {}),
         ...(args.modifier ? { modifierId: args.modifier } : {}),
+        ...(args.timing ? { untimed: args.timing === 'untimed' } : {}),
       },
     };
   } else start = { mode: 'menu' };
