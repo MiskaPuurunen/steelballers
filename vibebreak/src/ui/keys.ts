@@ -65,3 +65,52 @@ export function parseKeys(data: string): Key[] {
 }
 
 export const isCtrlC = (k: Key): boolean => k.ctrl === true && k.ch === 'c';
+
+export const PASTE_START = '\x1b[200~';
+export const PASTE_END = '\x1b[201~';
+const MAX_PASTE = 1024 * 1024;
+
+/**
+ * Stateful wrapper around parseKeys that understands bracketed paste. The
+ * terminal wraps pasted text in ESC[200~ ... ESC[201~, possibly split over
+ * several stdin chunks; the whole paste comes out as one { name: 'paste' }
+ * key with the text normalised to \n line endings. Terminals without
+ * bracketed paste simply deliver ordinary keys, as before.
+ */
+export class KeyStream {
+  private paste: string | null = null;
+
+  feed(data: string): Key[] {
+    const keys: Key[] = [];
+    let rest = data;
+    while (rest.length) {
+      if (this.paste === null) {
+        const start = rest.indexOf(PASTE_START);
+        if (start < 0) {
+          keys.push(...parseKeys(rest));
+          break;
+        }
+        if (start > 0) keys.push(...parseKeys(rest.slice(0, start)));
+        this.paste = '';
+        rest = rest.slice(start + PASTE_START.length);
+        continue;
+      }
+      const buf = this.paste + rest;
+      const end = buf.indexOf(PASTE_END);
+      if (end < 0) {
+        // Keep buffering; drop anything beyond the cap rather than grow forever.
+        this.paste = buf.length > MAX_PASTE ? buf.slice(0, MAX_PASTE) : buf;
+        break;
+      }
+      keys.push({ name: 'paste', text: buf.slice(0, end).replace(/\r\n?/g, '\n') });
+      this.paste = null;
+      rest = buf.slice(end + PASTE_END.length);
+    }
+    return keys;
+  }
+
+  /** True while in the middle of a paste that has not finished arriving. */
+  get pasting(): boolean {
+    return this.paste !== null;
+  }
+}

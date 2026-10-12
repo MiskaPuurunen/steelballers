@@ -16,8 +16,10 @@ export interface TerminalIO {
   stop(): void;
 }
 
-const ENTER = '\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H';
-const LEAVE = '\x1b[0m\x1b[?25h\x1b[?1049l';
+// Alternate screen, hidden cursor, bracketed paste (so a paste arrives as one
+// event; terminals that don't support it ignore the sequence).
+const ENTER = '\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[2J\x1b[H';
+const LEAVE = '\x1b[0m\x1b[?2004l\x1b[?25h\x1b[?1049l';
 
 export class NodeTerminal implements TerminalIO {
   private started = false;

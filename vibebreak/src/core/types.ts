@@ -5,13 +5,15 @@ import type { Rng } from './rng.js';
 export type KeyName =
   | 'up' | 'down' | 'left' | 'right'
   | 'enter' | 'escape' | 'space' | 'backspace' | 'tab'
-  | 'char' | 'unknown';
+  | 'char' | 'paste' | 'unknown';
 
 export interface Key {
   name: KeyName;
   /** The printable character for 'char' and 'space' keys. */
   ch?: string;
   ctrl?: boolean;
+  /** The full pasted text for 'paste' keys (bracketed paste). */
+  text?: string;
 }
 
 /* -------------------------------------------------------------- sessions */
@@ -120,5 +122,10 @@ export interface GameDefinition {
    * types every letter, so this is opt-in per game. Esc always pauses.
    */
   appKeys?: { pause?: string[]; restart?: string[]; quit?: string[] };
+  /**
+   * Set for user-made (Lua) games. Custom games never count towards XP,
+   * achievements or the daily challenge, and never appear in random picks.
+   */
+  custom?: { source: string; file?: string };
   create(ctx: GameContext): GameInstance;
 }

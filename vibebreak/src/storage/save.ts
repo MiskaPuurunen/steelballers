@@ -53,6 +53,8 @@ export interface SaveData {
   history: HistoryEntry[];
   lastGameId: string | null;
   daily: Record<string, DailyRecord>;
+  /** Best scores for user-made Lua games, kept apart from the built-in ones. */
+  customScores: Record<string, { score: number; at: string; seed: string }>;
   settings: Settings;
 }
 
@@ -69,6 +71,7 @@ export function defaultSave(now = new Date()): SaveData {
     history: [],
     lastGameId: null,
     daily: {},
+    customScores: {},
     settings: { color: 'auto', theme: 'classic', animations: true },
   };
 }
@@ -138,6 +141,13 @@ export function normalizeSave(raw: unknown): SaveData {
     for (const [k, v] of Object.entries(raw.daily)) {
       if (isObj(v) && typeof v.best === 'number') {
         s.daily[k] = { best: v.best, attempts: num(v.attempts), gameId: String(v.gameId ?? ''), modifierId: String(v.modifierId ?? '') };
+      }
+    }
+  }
+  if (isObj(raw.customScores)) {
+    for (const [k, v] of Object.entries(raw.customScores).slice(0, 500)) {
+      if (isObj(v) && typeof v.score === 'number' && Number.isFinite(v.score)) {
+        s.customScores[k] = { score: v.score, at: String(v.at ?? ''), seed: String(v.seed ?? '') };
       }
     }
   }

@@ -10,7 +10,8 @@ VibeBreak is a terminal arcade for developers who work with AI coding agents lik
 - **Progression:** high scores, XP, levels and 15 achievements. All of it is stored locally, with no account and no telemetry.
 - **Optional Claude Code integration:** a status line shows what Claude is doing (thinking, running a tool, waiting for you, done) while you play, per session, with how fresh the information is.
 - **Themes:** Classic, Christmas, Halloween, Frutiger Aero, Synthwave, Matrix and Amber CRT, plus a Seasonal option that switches by date. Each theme recolours the whole arcade and adds its own ambient effects (snow, bats, bubbles, digital rain…) around the menus.
-- **Zero runtime dependencies.** Node 18+ on Windows Terminal/PowerShell, macOS and Linux.
+- **Custom games:** write your own minigame in Lua, paste it or load the file from the menu, and play it like a built-in one. Scripts run in a sandbox.
+- **No required runtime dependencies.** Node 18+ on Windows Terminal/PowerShell, macOS and Linux. Custom games use the optional `wasmoon` package (Lua in WebAssembly).
 
 ```
 ██╗   ██╗██╗██████╗ ███████╗██████╗ ██████╗ ███████╗ █████╗ ██╗  ██╗
@@ -26,6 +27,8 @@ YOUR AI IS THINKING. YOU'RE PLAYING._
    [2] ARCADE
    [3] DAILY CHALLENGE
    [4] STATS & ACHIEVEMENTS
+   [5] THEMES
+   [6] CUSTOM GAMES
    [Q] QUIT
 ```
 
@@ -162,6 +165,29 @@ Open **[5] THEMES** from the menu. Moving the selection previews each theme live
 - **Animation off:** press `A` on the THEMES screen to turn ambient animation off (saved).
 - **Colour depth:** themes use 256-colour shades when the terminal supports them (Windows Terminal, iTerm2, most Linux terminals; the THEMES screen shows what was detected). Otherwise they fall back to the 16 standard colours. `NO_COLOR` still turns colour off completely.
 
+## Custom games (Lua)
+
+Open **[6] CUSTOM GAMES** in the menu to play games you write yourself.
+
+- **`N`** opens the editor with a working example game.
+- **`P`** opens the editor so you can paste code (Ctrl+V or right-click) or write it. **`Ctrl+S`** checks it and adds it.
+- **`F`** loads a `.lua` file by path. Dragging the file into the terminal pastes its path.
+
+Every script is checked before it is added: VibeBreak loads it, runs it for a few seconds with random input, and shows any error with its line number. Scripts that pass are copied to the `games` folder next to the save file, so they are still there next time. You can also drop `.lua` files into that folder and press `R` to reload.
+
+A game is one file: a `game` table (id, name, size, controls) plus optional callbacks `init`, `update(dt)`, `on_key(key)`, `render()`, `hud()`, `metrics()` and `perfect()`. The `vb` table gives access to scoring and the seeded RNG, plus the round's difficulty and modifier.
+
+```lua
+game = { id = "clicker", name = "Clicker", min_size = { w = 20, h = 3 } }
+local presses = 0
+function on_key(key)
+  if key.name == "space" then presses = presses + 1; vb.score(10) end
+end
+function render() return { "Press Space!", "", "Presses: " .. presses } end
+```
+
+Scripts are untrusted, so they run in a sandbox: Lua 5.4 in WebAssembly with no file, OS, network or terminal access, a per-call time budget, a memory cap, and sanitized output. Custom games don't give XP or achievements and never show up in Quick Play or the daily challenge; your best score for each is kept. See [docs/CUSTOM_GAMES.md](docs/CUSTOM_GAMES.md) for the full API.
+
 ## Random sessions and modifiers
 
 Every round rolls a **game** (weighted, never the same game twice in a row), a **difficulty** (Easy / Normal / Hard), a **modifier** and game-specific content such as layouts, spawn timing, snippet order and dungeon maps. The briefing screen shows all of it, including the seed, before play starts. Press `R` to reroll.
@@ -197,7 +223,7 @@ Stats live in one small JSON file:
 | macOS | `~/Library/Application Support/vibebreak/save.json` |
 | Linux | `$XDG_CONFIG_HOME/vibebreak/save.json` (default `~/.config/vibebreak/`) |
 
-Set `VIBEBREAK_HOME=/some/dir` to override the location. `vibebreak stats` prints the exact path.
+Set `VIBEBREAK_HOME=/some/dir` to override the location. `vibebreak stats` prints the exact path. Custom games are stored as `.lua` files in a `games` folder in the same directory.
 
 - Writes are atomic: the data goes to a temporary file that is then renamed over the save.
 - If the save file is unreadable, it is kept as `save.json.corrupt-<timestamp>`, a fresh save is started, and the menu tells you.
@@ -315,7 +341,7 @@ Auto-launch is opt-in because it moves keyboard focus. The status beacon on its 
 ```bash
 npm install
 npm run dev              # run from source (tsx)
-npm test                 # vitest: 210 tests
+npm test                 # vitest: 238 tests
 npm run typecheck
 npm run build            # compile to dist/
 python3 scripts/pty-smoke.py   # real-terminal smoke test (needs: pip install pyte; npm run build)
@@ -360,6 +386,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
 ## Project docs
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Custom games API](docs/CUSTOM_GAMES.md)
 - [Business plan](docs/BUSINESS_PLAN.md)
 - [Pitch outline, demo script and judge Q&A](docs/PITCH.md)
 

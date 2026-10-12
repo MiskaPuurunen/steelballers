@@ -169,3 +169,23 @@ export function recordRound(
     ...(dailyBest !== undefined ? { dailyBest } : {}),
   };
 }
+
+/**
+ * Record a round of a user-made game. Only the custom high score is kept:
+ * custom games never give XP, never unlock achievements, never count as a
+ * round of the arcade and never change the "last game" used by random picks,
+ * so a script cannot be used to farm progression.
+ */
+export function recordCustomRound(
+  save: SaveData,
+  def: GameDefinition,
+  session: SessionConfig,
+  result: GameResult,
+  now = new Date(),
+): RoundSummary {
+  const level = levelFromXp(save.xp);
+  const prev = save.customScores[def.id]?.score ?? null;
+  const newHighScore = result.score > 0 && (prev === null || result.score > prev);
+  if (newHighScore) save.customScores[def.id] = { score: result.score, at: now.toISOString(), seed: session.seed };
+  return { xpGained: 0, levelBefore: level, levelAfter: level, newHighScore, previousBest: prev, newAchievements: [] };
+}
