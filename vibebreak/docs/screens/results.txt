@@ -1,0 +1,12 @@
+ROUND ENDED EARLY
+Bug Bash · Double XP · hard · seed 7N4E-S6NR
+
+SCORE  0
+
+Bugs squashed 0               Golden bugs 0
+Best combo 0                  Accuracy 0%
+Escaped 0
+
++20 XP (double!)   LVL 1 ###-------------
+
+[Enter] replay  [N] play another  [M] menu  [Q] quit to shell

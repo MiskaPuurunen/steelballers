@@ -1,0 +1,14 @@
+VIBEBREAK > CODE SPRINT                                  hard · seed SMOKE-1
+SCORE 0  |  TIME 0:13  |  WPM 0  |  ACC 40%
+----------------------------------------------------------------------------
+
+                      type this:
+
+                        $ git commit -m "fix: typo"
+
+
+                      next: git rebase -i HEAD~3
+
+                      snippets 0   clean 0   errors 6
+----------------------------------------------------------------------------
+                                                  [Esc] pause  [Ctrl+C] exit
