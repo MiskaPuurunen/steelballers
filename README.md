@@ -1,3 +1,22 @@
+Actual readme under this: Here just dev notes and other shi
+- Custom games via LUA for example
+- Server support for leaderboards
+- other minigames
+  - Gambling game
+  - tetris?
+  - 
+- 
+
+
+Tests:
+- Works in windows terminal
+- Works in claude code
+- 
+
+
+
+
+
 # Steelballers
 
 > A tiny ASCII art game that lives in your terminal. Play it while your AI is thinking or tests are testing.
