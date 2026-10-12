@@ -8,12 +8,14 @@
 |---|---|
 | 5 minigames, random sessions, 7 modifiers, 3 difficulties | Additional game packs |
 | Seeded daily challenge with a local best and a text share card | Online leaderboards (needs a backend) |
-| Local XP, levels, 15 achievements, stats | Cloud sync of stats across machines |
+| Local XP, levels, 19 achievements, stats | Cloud sync of stats across machines |
 | Claude Code status beacon + opt-in auto-launch of a game pane via async hooks | Integrations for other agents |
 | Zero telemetry, offline, no account | Optional, opt-in accounts for paid features only |
 | MIT-licensed CLI | Cosmetic themes / ASCII art styles, custom modifiers, team editions |
 
-No payment processing is implemented.
+| LAN multiplayer: Battleship, Prompt Panic, Doodle Protocol, party mix, custom prompt packs (local JSON) | Premium party-game packs, curated prompt packs, a pack marketplace |
+
+No payment processing is implemented. The LAN multiplayer added later is free, works offline and has no accounts or backend.
 
 ## 2. The problem
 
@@ -49,6 +51,19 @@ Defensibility is low at the code level (games are easy to clone). The real moat,
 | **VibeBreak Cloud** (subscription) | Stats synced across machines, global and friends leaderboards for the daily, community challenge packs | €2–4 / month |
 | **Team edition** | Private team leaderboards, a shared weekly challenge, custom branding, admin-controlled settings | €3–5 per seat / month, minimum 5 seats |
 | **Sponsored daily** (experiment) | A dev-tool company brands one day's challenge (tasteful, no tracking) | Flat fee per day; to be discovered |
+
+**LAN party ideas (hypotheses, not built):**
+
+| Idea | Notes |
+|---|---|
+| Premium party-game packs | New multiplayer games built on the shared lobby (e.g. a team trivia or bluffing game), sold once |
+| Curated prompt packs | Themed Prompt Panic decks (conference edition, holiday edition, language-specific dev humour). The pack format and validator already exist |
+| Cosmetic themes | Lobby and board skins; would reuse the existing theme system |
+| Community content | Shared prompt packs and word lists; needs moderation tooling before it is viable |
+| Expanded edition (one-time) | Bundle of packs, themes and extra games |
+| Team / event edition | Custom branding in the lobby, a host-only "event mode" for offsites and meetups |
+
+The core LAN game, the three current multiplayer games and custom packs stay free and offline. Payments, accounts and a cloud backend are explicitly out of scope for now.
 
 The guiding principle is never to monetise attention. No ads in the game loop, no dark patterns, nothing that extends play time. Charging for that would contradict the product.
 

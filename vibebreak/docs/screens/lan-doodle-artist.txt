@@ -1,0 +1,22 @@
+
+ VIBEBREAK > LAN > room XFRD                              2/8 players  ● online
+ ------------------------------------------------------------------------------
+ DOODLE PROTOCOL   turn 1/2   artist: Matei   1:20
+ Draw: cookie  (no letters or words!)
+ +------------------------------+   GUESSES
+ |                              |   Matei is drawing.
+ |                              |   Grace: banana
+ |                              |
+ |                              |   SCORES
+ |                              |    1. Matei                       0
+ |                              |    2. Grace                       0
+ |               *########      |
+ |               *       #      |
+ |               *       #      |
+ |               *       #      |
+ |               ********#      |
+ |                              |
+ +------------------------------+
+ Brush  #  *  o  +  .  -  |  /  \  =  @  ~  PEN DOWN
+ ------------------------------------------------------------------------------
+ [Arrows] move  [Space] stamp  [P] pen  [E] eraser  [1-0,-,=] brush  [Esc] menu

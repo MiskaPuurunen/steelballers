@@ -1,0 +1,21 @@
+
+ VIBEBREAK > LAN > room RGUM                              3/8 players  ● online
+ ------------------------------------------------------------------------------
+ ╔═════════════════════════════ PROMPT PANIC ═════════════════════════════╗
+ ║ ROUND 1 / 5                                             PLAYERS: 3     ║
+ ║ Party Classics · Mild                                                  ║
+ ║                                                                        ║
+ ║ RESULTS                                                                ║
+ ║  A  YAML, but the indentation is emotional.                            ║
+ ║      by Ada  2 votes ##  +225                                          ║
+ ║  B  A language where every bug is a feature flag                       ║
+ ║      by Matei  1 vote #  +125                                          ║
+ ║  C  Semicolon++: every line ends in three of them, for safety.         ║
+ ║      by Linus  0 votes   +25                                           ║
+ ║                                                                        ║
+ ║ SCORES  Ada 225 · Matei 125 · Linus 25                                 ║
+ ║                                                                        ║
+ ║ TIME REMAINING: 0:10                                                   ║
+ ╚════════════════════════════════════════════════════════════════════════╝
+ ------------------------------------------------------------------------------
+ [N] next round  [Esc] menu

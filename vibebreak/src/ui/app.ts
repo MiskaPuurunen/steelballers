@@ -3,7 +3,7 @@ import type { GameDefinition, GameInstance, GameResult, Key, SessionConfig, Tone
 import { Rng } from '../core/rng.js';
 import { generateSession, todayUtc, type SessionOptions } from '../core/session.js';
 import { getModifier, DIFFICULTIES } from '../core/modifiers.js';
-import { levelProgress, recordCustomRound, recordRound, unlock, getAchievement, type RoundSummary } from '../core/progression.js';
+import { levelProgress, recordCustomRound, recordLanMatch, recordRound, unlock, getAchievement, type RoundSummary } from '../core/progression.js';
 import { GAMES } from '../games/index.js';
 import { configDir, type SaveData, type SaveStore } from '../storage/save.js';
 import type { AgentMonitor, AgentSnapshot } from '../integrations/agent-status.js';
@@ -23,6 +23,10 @@ import {
 import { statsLines } from './stats-view.js';
 import { THEMES, SEASONAL, activeTheme, applyTheme, overlayParticles, particleCells, resolveTheme, seasonalTheme, themeIds, type ThemeDef } from './themes.js';
 import { paint } from './style.js';
+import { LanScreen, type LanDeps, type LanStart } from './lan/lan-screen.js';
+import { resolveBind } from '../net/address.js';
+import { cleanName } from '../net/sanitize.js';
+import os from 'node:os';
 
 /* ------------------------------------------------------------------ deps */
 
@@ -41,7 +45,8 @@ export const realScheduler: Scheduler = {
 export type StartMode =
   | { mode: 'menu' }
   | { mode: 'play'; session: SessionOptions }
-  | { mode: 'daily' };
+  | { mode: 'daily' }
+  | { mode: 'lan'; lan: LanStart };
 
 export interface AppOptions {
   io: TerminalIO;
@@ -65,6 +70,8 @@ export interface AppOptions {
   countdownMs?: number;
   /** Theme for this run only (--theme); otherwise the saved setting. */
   themeOverride?: string;
+  /** Overrides for LAN networking (tests inject fakes). */
+  lanDeps?: Partial<LanDeps>;
 }
 
 export interface ExitInfo {
@@ -103,7 +110,8 @@ type State =
   | { kind: 'themes'; sel: number; revertTo: ThemeDef }
   | { kind: 'custom'; sel: number; confirmDelete: boolean }
   | { kind: 'custom-file'; input: LineInput; error: string | null; failedSource: string | null }
-  | { kind: 'custom-editor'; error: string | null; confirmClear: boolean };
+  | { kind: 'custom-editor'; error: string | null; confirmClear: boolean }
+  | { kind: 'lan'; screen: LanScreen };
 
 type CustomStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
 
@@ -114,6 +122,9 @@ const MENU_ITEMS: Array<{ key: string; label: string; hint: string }> = [
   { key: '4', label: 'STATS & ACHIEVEMENTS', hint: 'your progress' },
   { key: '5', label: 'THEMES', hint: 'Christmas, Halloween, Frutiger Aero...' },
   { key: '6', label: 'CUSTOM GAMES', hint: 'play your own Lua games' },
+  { key: 'H', label: 'HOST LAN GAME', hint: 'Battleship, Prompt Panic, Doodle Protocol' },
+  { key: 'J', label: 'JOIN LAN GAME', hint: 'find a room on your network' },
+  { key: 'P', label: 'PARTY MODE', hint: 'host a random party game mix' },
   { key: 'Q', label: 'QUIT', hint: 'back to work' },
 ];
 
@@ -166,6 +177,7 @@ export class App {
   private customLoading: Promise<void> = Promise.resolve();
   /** The paste/write editor keeps its text between visits. */
   private readonly draft = new TextEditor();
+  private readonly lanDeps: Partial<LanDeps>;
 
   constructor(opts: AppOptions) {
     this.io = opts.io;
@@ -182,10 +194,36 @@ export class App {
     this.loadRuntime = opts.loadRuntime ?? loadLuaRuntime;
     this.countdownMs = opts.countdownMs ?? COUNTDOWN_MS;
     this.launchedToPlay = opts.start.mode !== 'menu';
+    this.lanDeps = opts.lanDeps ?? {};
     applyTheme(resolveTheme(opts.themeOverride ?? this.save.settings.theme));
     this.state = { kind: 'menu', sel: 0 };
     if (opts.start.mode === 'play') this.toBriefing(this.newSession(opts.start.session));
     else if (opts.start.mode === 'daily') this.toBriefing(this.newSession({ daily: todayUtc() }));
+    else if (opts.start.mode === 'lan') this.state = { kind: 'lan', screen: this.newLan(opts.start.lan) };
+  }
+
+  /** The LAN screen, if in LAN mode (for tests). */
+  get lan(): LanScreen | null {
+    return this.state.kind === 'lan' ? this.state.screen : null;
+  }
+
+  private newLan(start: LanStart): LanScreen {
+    return new LanScreen(start, {
+      defaultName: cleanName(this.save.settings.lanName ?? osUserName(), 'Player'),
+      resolveBind,
+      saveName: (name) => {
+        if (this.save.settings.lanName === name) return;
+        this.save.settings.lanName = name;
+        this.store.save(this.save);
+      },
+      recordMatch: (rec) => {
+        const unlocked = recordLanMatch(this.save, rec);
+        this.store.save(this.save);
+        for (const a of unlocked) this.exitMessages.push(theme.gold(`Achievement unlocked: ${a.name}`) + theme.muted(` - ${a.description}`));
+      },
+      agentLine: (w) => (this.agent ? this.agentLine(w) : ''),
+      ...this.lanDeps,
+    });
   }
 
   /** Current state kind (for tests). */
@@ -238,6 +276,7 @@ export class App {
       this.handle = null;
     }
     if (this.state.kind === 'playing') this.state.game.dispose();
+    if (this.state.kind === 'lan') this.state.screen.dispose();
     this.io.stop();
     const messages = [...this.exitMessages];
     if (this.dailyShare) messages.push('', this.dailyShare);
@@ -273,6 +312,9 @@ export class App {
         s.playedMs += dt;
         if (s.game.isOver()) this.finishRound();
       }
+    } else if (s.kind === 'lan') {
+      s.screen.tick(dt);
+      if (s.screen.done) this.state = { kind: 'menu', sel: 0 };
     } else if (s.kind === 'results') {
       s.lockMs -= dt;
       const target = s.result.score;
@@ -339,6 +381,10 @@ export class App {
       case 'custom': return this.customKey(s, key);
       case 'custom-file': return this.customFileKey(s, key);
       case 'custom-editor': return this.customEditorKey(s, key);
+      case 'lan':
+        s.screen.onKey(key);
+        if (s.screen.done) this.state = { kind: 'menu', sel: 0 };
+        return;
     }
   }
 
@@ -432,6 +478,9 @@ export class App {
       this.state = { kind: 'themes', sel: cur >= 0 ? cur : ids.indexOf(activeTheme().id), revertTo: activeTheme() };
     }
     else if (k === '6') this.toCustomList();
+    else if (k === 'H') this.state = { kind: 'lan', screen: this.newLan({ mode: 'host' }) };
+    else if (k === 'J') this.state = { kind: 'lan', screen: this.newLan({ mode: 'join' }) };
+    else if (k === 'P') this.state = { kind: 'lan', screen: this.newLan({ mode: 'host', party: true }) };
     else if (k === 'Q') this.quit();
   }
 
@@ -806,10 +855,11 @@ export class App {
         case 'custom': lines = this.renderCustom(this.state); break;
         case 'custom-file': lines = this.renderCustomFile(this.state); break;
         case 'custom-editor': lines = this.renderEditor(this.state); break;
+        case 'lan': lines = this.state.screen.render(columns, rows); break;
       }
       // Ambient particles fill empty space on menu-like screens, never on a game board.
       const specs = activeTheme().particles;
-      if (specs && this.save.settings.animations && this.state.kind !== 'playing') {
+      if (specs && this.save.settings.animations && this.state.kind !== 'playing' && this.state.kind !== 'lan') {
         lines = overlayParticles(lines, particleCells(specs, columns, rows, this.animMs), columns, rows);
       }
     }
@@ -856,7 +906,8 @@ export class App {
     const { columns, rows } = this.io;
     const cursor = Math.floor(this.animMs / 530) % 2 ? '_' : ' ';
     const body: string[] = [];
-    body.push(...logo(columns, this.animMs / 180));
+    // The big logo needs 6 rows; short terminals get the one-line version.
+    body.push(...logo(rows >= 30 ? columns : 0, this.animMs / 180));
     body.push('');
     body.push(theme.muted(activeTheme().tagline) + theme.primary(cursor));
     body.push('');
@@ -871,7 +922,7 @@ export class App {
     if (ai) body.push(ai);
     if (this.notice) body.push(theme.gold(this.notice));
     body.push('');
-    body.push(keyHint([['Up/Down', 'select'], ['Enter', 'go'], ['1-6', 'shortcut'], ['Q', 'quit']]));
+    body.push(keyHint([['Up/Down', 'select'], ['Enter', 'go'], ['1-6 H J P', 'shortcut'], ['Q', 'quit']]));
     return centerVertically(centerBlock(body, columns), rows);
   }
 
@@ -1213,4 +1264,12 @@ function wrapText(text: string, width: number): string[] {
   }
   if (line) out.push(line);
   return out.slice(0, 4);
+}
+
+function osUserName(): string {
+  try {
+    return os.userInfo().username || 'Player';
+  } catch {
+    return 'Player';
+  }
 }

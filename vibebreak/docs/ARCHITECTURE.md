@@ -27,11 +27,25 @@ src/
                 layout.ts      logo, HUD, bars, centering helpers
                 app.ts         the arcade shell: one state machine, one loop, one input handler
                 stats-view.ts  stats screen shared with `vibebreak stats`
+                text-editor.ts in-terminal editor for Lua custom games
+  custom/       lua-runtime.ts lua-game.ts library.ts template.ts  user-made Lua games (see CUSTOM_GAMES.md)
   storage/      save.ts        config dir per OS, atomic JSON save, validation, corruption backup
   integrations/ agent-model.ts   typed AI-status state machine + staleness rules (pure)
                 agent-status.ts  per-session event store, hook entry, AgentMonitor (consumer)
                 claude-settings.ts, launcher.ts  hook install/inspect, auto-launch
   cli/          hook.ts        fast hook path (loads no UI); doctor.ts `vibebreak doctor`
+  net/          protocol.ts    LAN wire protocol v1: envelopes, validation, line framing, token buckets
+                sanitize.ts    untrusted text: strip control/bidi/wide chars, wrap, deep scrub
+                address.ts     private-address policy, LAN interface choice, host:port parsing
+                lobby.ts       transport-agnostic lobby: members, host commands, match lifecycle, views
+                server.ts      TCP host: framing, handshake/idle timeouts, heartbeats, flood limits
+                client.ts      TCP client: join, auto-reconnect with seat resume, acked actions
+                discovery.ts   UDP broadcast room discovery (responder + scanner)
+  mp/           types.ts       server-authoritative multiplayer contract (MpGameDefinition, MpMatch)
+                registry.ts    LAN game registry; bot.ts automated player; headless.ts dedicated host/bot
+  games/multiplayer/  battleship.ts prompt-panic.ts prompts.ts moderation.ts doodle.ts
+  ui/lan/       lan-screen.ts  host/join setup, lobby, intro, match, results (driven by the App loop)
+                battleship-ui.ts prompt-panic-ui.ts doodle-ui.ts game-uis.ts widgets.ts
 tests/          vitest suites (unit, lifecycle fuzzing, app flow with a fake terminal + clock)
 scripts/        pty-smoke.py   real pseudo-terminal end-to-end smoke test
 ```
@@ -143,6 +157,27 @@ Claude Code ──hook (async, exit 0, no stdout)──▶ vibebreak hook (cli/h
 - **Auto-launch (implemented, opt-in).** `vibebreak hook --launch` (`src/integrations/launcher.ts`) runs on `UserPromptSubmit`. `planLaunch()` is a pure function that picks a Windows Terminal split, a tmux split, an iTerm2 split, Terminal.app, `$TERMINAL`, or a new console window. The child is spawned detached and unref'd with no stdio. `arcade.lock` (pid plus a liveness check) prevents duplicates, and `last-launch.json` enforces a 60-second gap. Launched sessions use `play --from-hook`, which shortens the countdown to 2 seconds.
 - **Other agents.** `vibebreak hook` accepts any JSON with `hook_event_name` and `session_id`. The model encodes *Claude Code* event semantics, so another agent should go through a small adapter that maps its own events onto those meanings, not be assumed identical. Auto-launched games receive `--agent-session <id>` and follow that session.
 - **Agent-aware rounds.** An optional mode that ends the round gracefully (with the usual warning) when the agent reports *done*.
+
+## LAN multiplayer
+
+```
+ player terminal                      host process                          player terminal
+ ┌──────────────┐   TCP, NDJSON v1   ┌───────────────────────────────┐     ┌──────────────┐
+ │ App loop     │ ─── hello/action ─>│ LanServer (sockets, limits)   │<────│ App loop     │
+ │  LanScreen   │<── lobby/view/ack ─│   Lobby (seats, host cmds)    │────>│  LanScreen   │
+ │  game UI     │                    │     MpMatch (game rules)      │     │  game UI     │
+ └──────────────┘                    └───────────────────────────────┘     └──────────────┘
+                                       host's own App joins via loopback
+```
+
+- **Server-authoritative.** `MpMatch` implementations are synchronous and pure like solo games: no sockets, timers or terminal access. The lobby feeds them validated actions and `tick(now)`, and asks `viewFor(playerId)` for each viewer. Views are diffed per player as JSON and only sent when they change. Small deltas, such as Doodle strokes, go out as events with a revision number. A client that sees a gap asks for a snapshot.
+- **One networking stack.** Framing, size limits, rate limits, heartbeats, reconnection, kick/ban, spectators, chat, rematches and party mode live in `src/net`. Games only implement rules and views.
+- **The host is a client too.** The hosting player's App connects to its own server over loopback with a secret host key. Host and guests share one code path, and the dedicated host (`--dedicated`) is the same server without a UI.
+- **Terminal safety.** Network callbacks only update `LanClient` state. The App's single loop renders it on the next frame, and its single input handler routes keys. Nothing in `src/net` writes to the terminal, so live updates can't tear frames or fight over stdin. AI-status polling keeps running in the same loop and isn't blocked by networking.
+- **Trust.** Identity comes from the connection, not from what the client claims. Client-sent scores, outcomes and positions don't exist in the protocol. Strings are cleaned on the server, and again on each client before rendering.
+- **Persistence.** When a match ends, each client records the server-reported result for its own player in `save.lan`. That feeds stats and the four LAN achievements.
+
+See [LAN.md](LAN.md) for the user guide, protocol summary and limitations.
 
 ## Testing strategy
 

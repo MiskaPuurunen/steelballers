@@ -2,7 +2,7 @@
  * Tiny dependency-free argument parser. Pure, so it is fully unit-tested.
  */
 
-export type Command = 'menu' | 'play' | 'daily' | 'list' | 'stats' | 'reset' | 'hook' | 'doctor' | 'theme' | 'help' | 'version';
+export type Command = 'menu' | 'play' | 'daily' | 'list' | 'stats' | 'reset' | 'hook' | 'doctor' | 'theme' | 'host' | 'join' | 'rooms' | 'help' | 'version';
 
 export interface ParsedArgs {
   command: Command;
@@ -25,15 +25,44 @@ export interface ParsedArgs {
   agentSession?: string;
   /** Theme for this run (not saved). */
   theme?: string;
+  /** LAN: port to host on / connect to. */
+  port?: number;
+  /** LAN host: interface to bind (lan, local, all, or an address). */
+  bind?: string;
+  /** LAN: display name. */
+  name?: string;
+  /** LAN host: maximum players (2-8). */
+  maxPlayers?: number;
+  /** LAN host: random party mix. */
+  party: boolean;
+  /** LAN: join (or host) as a spectator. */
+  spectate: boolean;
+  /** LAN host: accept connections from non-private addresses. */
+  allowPublic: boolean;
+  /** LAN host: run a headless server with a text console (no TTY needed). */
+  dedicated: boolean;
+  /** LAN join: play automatically (for testing and demos). */
+  bot: boolean;
+  /** LAN host: game options, e.g. --set rounds=3. */
+  sets: Record<string, string>;
+  /** LAN host: custom prompt pack files. */
+  packs: string[];
+  /** Dedicated host: start automatically once N players are ready. */
+  autoStart?: number;
+  /** Dedicated host / bot: exit after N completed matches. */
+  matches?: number;
   /** Positional args after the command (e.g. `hook install`). */
   rest: string[];
   error?: string;
 }
 
-const COMMANDS: Command[] = ['play', 'daily', 'list', 'stats', 'reset', 'hook', 'doctor', 'theme', 'help', 'version'];
+const COMMANDS: Command[] = ['play', 'daily', 'list', 'stats', 'reset', 'hook', 'doctor', 'theme', 'host', 'join', 'rooms', 'help', 'version'];
 
 export function parseArgs(argv: string[]): ParsedArgs {
-  const out: ParsedArgs = { command: 'menu', random: false, noColor: false, yes: false, json: false, launch: false, fromHook: false, write: false, rest: [] };
+  const out: ParsedArgs = {
+    command: 'menu', random: false, noColor: false, yes: false, json: false, launch: false, fromHook: false, write: false,
+    party: false, spectate: false, allowPublic: false, dedicated: false, bot: false, sets: {}, packs: [], rest: [],
+  };
   const args = [...argv];
   let commandSet = false;
 
@@ -75,6 +104,56 @@ export function parseArgs(argv: string[]): ParsedArgs {
             const n = Number(v.replace(/s$/, ''));
             if (!Number.isFinite(n) || n <= 0) out.error ??= `Invalid duration "${v}" (expected seconds, e.g. --duration 30)`;
             else out.duration = n;
+          }
+          break;
+        }
+        case '-p': case '--port': {
+          const v = takeValue(flag, inline);
+          if (v !== undefined) {
+            const n = Number(v);
+            if (!Number.isInteger(n) || n < 1 || n > 65535) out.error ??= `Invalid port "${v}" (1-65535)`;
+            else out.port = n;
+          }
+          break;
+        }
+        case '--bind': out.bind = takeValue(flag, inline); break;
+        case '--local': out.bind = 'local'; break;
+        case '-n': case '--name': out.name = takeValue(flag, inline); break;
+        case '--max-players': case '--max': {
+          const v = takeValue(flag, inline);
+          if (v !== undefined) {
+            const n = Number(v);
+            if (!Number.isInteger(n) || n < 2 || n > 8) out.error ??= `Invalid player limit "${v}" (2-8)`;
+            else out.maxPlayers = n;
+          }
+          break;
+        }
+        case '--party': out.party = true; break;
+        case '--spectate': out.spectate = true; break;
+        case '--allow-public': out.allowPublic = true; break;
+        case '--dedicated': out.dedicated = true; break;
+        case '--bot': out.bot = true; break;
+        case '--set': {
+          const v = takeValue(flag, inline);
+          if (v !== undefined) {
+            const eq = v.indexOf('=');
+            if (eq <= 0) out.error ??= `Invalid --set "${v}" (expected key=value, e.g. --set rounds=3)`;
+            else out.sets[v.slice(0, eq)] = v.slice(eq + 1);
+          }
+          break;
+        }
+        case '--pack': {
+          const v = takeValue(flag, inline);
+          if (v !== undefined) out.packs.push(v);
+          break;
+        }
+        case '--autostart': case '--matches': {
+          const v = takeValue(flag, inline);
+          if (v !== undefined) {
+            const n = Number(v);
+            if (!Number.isInteger(n) || n < 1 || n > 99) out.error ??= `Invalid ${flag} "${v}" (1-99)`;
+            else if (flag === '--autostart') out.autoStart = n;
+            else out.matches = n;
           }
           break;
         }
@@ -126,6 +205,15 @@ Usage:
   vibebreak doctor [--json]      Is the Claude Code integration installed, and receiving events?
   vibebreak hook debug on|off    Log every status event to the agent folder (no prompt text)
 
+LAN multiplayer (same network, no internet or accounts needed):
+  vibebreak host                 Host a lobby (pick the game in the lobby)
+  vibebreak host --game battleship | prompt-panic | doodle-protocol
+  vibebreak host --party         Party mix: a random game each match
+  vibebreak join 192.168.1.42    Join a host (also host:port, or --port 7777)
+  vibebreak join                 Browse rooms on your network, or type an address
+  vibebreak rooms [--json]       List VibeBreak rooms on your network
+  In the menu: [H] host, [J] join, [P] party mode.
+
 Options:
   -g, --game <id>        bugbash | snake | codesprint | stack | dungeon | crossy | tetris
   -d, --duration <sec>   Round time limit. A round may end sooner (e.g. game over);
@@ -138,6 +226,23 @@ Options:
                          matrix | amber | seasonal (this run only; "vibebreak theme" saves it)
   -r, --random           Random game (the default for play)
       --no-color         Disable colours (NO_COLOR is also respected)
+
+LAN options:
+  -p, --port <n>         Port to host on / connect to (default 7777; next free port is used)
+      --bind <addr>      Host interface: lan (default: your LAN IP), local (this computer
+                         only), all (every interface), or an IP address
+      --local            Same as --bind local
+  -n, --name <name>      Your display name (remembered)
+      --max-players <n>  Player limit, 2-8 (spectators are extra)
+      --set key=value    Game option, e.g. --set rounds=3 --set answerTime=45 (see "vibebreak list")
+      --pack <file.json> Custom Prompt Panic prompt pack (also auto-loaded from the
+                         prompt-packs folder in your VibeBreak config directory)
+      --spectate         Watch instead of play
+      --allow-public     Accept players from non-private addresses (not recommended)
+      --dedicated        Headless host with a text console (start, kick, game, close...)
+      --autostart <n>    Dedicated host: start when n players are ready
+      --matches <n>      Dedicated host / --bot: exit after n matches
+      --bot              Join as an automated player (testing and demos)
   -h, --help             Show this help
   -v, --version          Show version
 

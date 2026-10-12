@@ -20,7 +20,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "npm run typecheck && npm test && npm run build",
-    "smoke": "npm run build && python3 scripts/pty-smoke.py"
+    "smoke": "npm run build && python3 scripts/pty-smoke.py",
+    "demo:lan": "npm run build && node scripts/lan-demo.mjs",
+    "screens:lan": "tsx scripts/lan-screens.ts"
   },
   "keywords": [
     "cli",
@@ -30,7 +32,10 @@
     "ascii",
     "claude-code",
     "ai",
-    "developer-tools"
+    "developer-tools",
+    "multiplayer",
+    "lan",
+    "party-game"
   ],
   "author": "Matei Stefan Crisan",
   "license": "MIT",

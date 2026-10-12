@@ -28,7 +28,15 @@ export function statsLines(save: SaveData, games: readonly GameDefinition[], wid
   }
   const today = save.daily[todayUtc()];
   lines.push('');
-  lines.push(theme.muted('Daily challenge today: ') + (today ? c.bold(fmt(today.best)) + theme.muted(` (${today.attempts} attempts)`) : theme.muted('not played yet')));
+  const daily = theme.muted('Daily challenge today: ') + (today ? c.bold(fmt(today.best)) + theme.muted(` (${today.attempts} attempts)`) : theme.muted('not played yet'));
+  const lan = theme.muted('LAN matches: ') + (save.lan.matches
+    ? c.bold(fmt(save.lan.matches)) + theme.muted(' played, ') + c.bold(fmt(save.lan.wins)) + theme.muted(' won')
+    : theme.muted('none yet'));
+  if (compact) lines.push(daily + theme.muted('   ') + lan);
+  else {
+    lines.push(daily);
+    lines.push(lan + (save.lan.matches ? theme.muted('  (' + Object.entries(save.lan.games).map(([id, g]) => `${id} ${g.plays}`).join(', ') + ')') : theme.muted(' (vibebreak host / vibebreak join)')));
+  }
   lines.push('');
   const unlocked = ACHIEVEMENTS.filter((a) => save.achievements[a.id]).length;
   lines.push(theme.muted(`ACHIEVEMENTS ${unlocked}/${ACHIEVEMENTS.length}`));

@@ -7,7 +7,8 @@ VibeBreak is a terminal arcade for developers who work with AI coding agents lik
 - **7 minigames:** Bug Bash, Terminal Snake, Code Sprint, Stack Overflow, Dependency Dungeon, Crossy Prod and Tetris.
 - **Random sessions:** each round rolls a game, a difficulty and a modifier such as *Overclocked*, *Glass Cannon* or *Chaos Mode*. Runs are seeded, so any session can be replayed exactly.
 - **Daily challenge:** one seed per day, the same for everyone, with a share card you can paste.
-- **Progression:** high scores, XP, levels and 15 achievements. All of it is stored locally, with no account and no telemetry.
+- **LAN multiplayer:** host a lobby, friends join from their own terminals on the same network. **Battleship** (versus), **Prompt Panic** (write the funniest answer, vote anonymously) and **Doodle Protocol** (ASCII draw-and-guess), or a random **Party Mix**. Server-authoritative, no accounts, no internet. See [docs/LAN.md](docs/LAN.md).
+- **Progression:** high scores, XP, levels and 19 achievements. All of it is stored locally, with no account and no telemetry.
 - **Optional Claude Code integration:** a status line shows what Claude is doing (thinking, running a tool, waiting for you, done) while you play, per session, with how fresh the information is.
 - **Themes:** Classic, Christmas, Halloween, Frutiger Aero, Synthwave, Matrix and Amber CRT, plus a Seasonal option that switches by date. Each theme recolours the whole arcade and adds its own ambient effects (snow, bats, bubbles, digital rain…) around the menus.
 - **Custom games:** write your own minigame in Lua, paste it or load the file from the menu, and play it like a built-in one. Scripts run in a sandbox.
@@ -29,6 +30,9 @@ YOUR AI IS THINKING. YOU'RE PLAYING._
    [4] STATS & ACHIEVEMENTS
    [5] THEMES
    [6] CUSTOM GAMES
+   [H] HOST LAN GAME
+   [J] JOIN LAN GAME
+   [P] PARTY MODE
    [Q] QUIT
 ```
 
@@ -94,6 +98,10 @@ Use a global install for the hook setup. `npx` runs from a temporary cache, so t
 | `vibebreak doctor` | Is the Claude Code integration configured, and is it actually receiving events? (`--json` too) |
 | `vibebreak hook status` | One-line summary of the AI status the HUD would show |
 | `vibebreak hook debug on\|off` | Log every status event and transition (no prompt text) for troubleshooting |
+| `vibebreak host` | Host a LAN lobby (`--game battleship\|prompt-panic\|doodle-protocol`, `--party`, `--port`, `--max-players`, `--set key=value`) |
+| `vibebreak join 192.168.1.42` | Join a LAN game (`--port 7777` or `host:port`; no address = browse rooms) |
+| `vibebreak rooms` | List VibeBreak rooms on your network (`--json` too) |
+| `vibebreak host --dedicated` | Headless LAN server with a text console (no TTY needed) |
 | `vibebreak --help` / `--version` | Usage / version |
 
 **What `--duration` means:** it sets the round's maximum length. A round can end sooner, for example when the snake crashes or the tower topples. The HUD timer turns yellow at 10 seconds left, and the last 5 seconds are counted down on screen, so a round never stops without warning. Each game has its own default (30–60s). The daily challenge always uses the default so scores can be compared.
@@ -143,6 +151,28 @@ The classic, in plain ASCII. All seven tetrominoes come from a **7-bag** randomi
 | `Q` / `Esc` | End the round (Q) or open the pause menu (Esc) |
 
 Clearing 1, 2, 3 or 4 lines at once scores 100, 300, 500 or 800 × level. You level up every 10 lines (Easy starts at level 1, Normal at 2, Hard at 4), and gravity follows the guideline curve, so pieces fall faster each level. If a new piece can't spawn, you've topped out and the game is over. The side panel shows score, level, lines and your personal best, and the controls stay on screen the whole time. The well is 10 × 16 rather than the usual 20 rows, so the game fits an 80 × 24 terminal with the HUD. Chaos Mode pushes up a garbage line every 12–18 seconds ("Merge conflict!"). Low Battery and Glass Cannon are never rolled for Tetris, because it has no lives or penalties.
+
+## LAN multiplayer
+
+One person hosts and everyone else joins from their own terminal on the same network:
+
+```bash
+vibebreak host                       # host: opens a lobby and shows the join command
+vibebreak join 192.168.1.42          # friends: join with the address the host's lobby shows
+```
+
+| Game | Players | How it plays |
+|---|---|---|
+| **Battleship** | 2 (+ spectators) | Place your fleet with the cursor, by typing coordinates like `B4`, or at random, then take turns firing. The server checks every placement and shot, and you never receive the enemy's unhit ship positions |
+| **Prompt Panic** | 3–8 | Everyone answers the same absurd prompt (161 original prompts in 8 categories, plus custom JSON packs). Answers are shown anonymously, everyone votes, and votes become points. No self-votes, no double votes |
+| **Doodle Protocol** | 3–8 | The artist draws a secret word on a 30×12 ASCII canvas while everyone else guesses. Strokes are sent as small changes, and the word stays on the server until the reveal |
+| **Party Mix** | 2–8 | `vibebreak host --party`: a random game each match, with a "next game" transition between them |
+
+The lobby offers ready-up, chat, kick, spectators, per-game options, rematches and party standings. Dropped players reconnect automatically and keep their seat. By default the host binds only to your private LAN address and refuses non-private peers. All player text is cleaned so nobody can send escape sequences to someone else's terminal. `vibebreak join` and `vibebreak rooms` can find hosts via UDP broadcast, and typing the address always works.
+
+**Firewall:** the host must allow Node.js on **private** networks (Windows asks the first time). Joiners need nothing. Full guide (setup, rules, controls, protocol, limitations): **[docs/LAN.md](docs/LAN.md)**.
+
+Try it on one machine: `npm run build && node scripts/lan-demo.mjs`. This runs a host and bot players as separate processes and plays a Battleship match and a Prompt Panic game.
 
 ## Themes
 
@@ -210,7 +240,7 @@ Seeds are fully deterministic: `vibebreak play --seed K7Q2-M9XA` reproduces the 
 
 - High score per game, plus game-specific personal bests (best combo, longest snake, top WPM, tallest tower, dungeon escapes, farthest crossing, most lines).
 - XP comes from score (normalised per game), with bonuses for perfect rounds, new personal bests and the daily challenge. XP per round is capped, so skill matters more than grinding.
-- 15 achievements, including *Back to Work*: finish a round and quit straight back to your code. Leaving is rewarded on purpose.
+- 19 achievements (4 for LAN games), including *Back to Work*: finish a round and quit straight back to your code. Leaving is rewarded on purpose.
 - Nothing decays and there are no streak-loss mechanics. Stopping costs you nothing.
 
 ## Save file and configuration
@@ -341,11 +371,15 @@ Auto-launch is opt-in because it moves keyboard focus. The status beacon on its 
 ```bash
 npm install
 npm run dev              # run from source (tsx)
-npm test                 # vitest: 238 tests
+npm test                 # vitest: 324 tests (incl. real TCP and multi-process LAN matches)
 npm run typecheck
 npm run build            # compile to dist/
 python3 scripts/pty-smoke.py   # real-terminal smoke test (needs: pip install pyte; npm run build)
+node scripts/lan-demo.mjs      # LAN demo: host + bot processes play real matches (after npm run build)
+npx tsx scripts/lan-screens.ts # render the LAN screens to docs/screens/lan-*.txt (80x24 by default)
 ```
+
+The LAN tests cover real TCP between in-process clients, the arcade UI on two simulated terminals over loopback, and **separate OS processes**: a dedicated host plus bot clients completing Battleship and Prompt Panic matches.
 
 The PTY smoke test launches the built CLI in a real pseudo-terminal, sends keystrokes, renders the output with a VT100 emulator and checks:
 
@@ -368,6 +402,13 @@ On Windows, run it inside WSL (it needs a Unix PTY).
 
 That's it. Random selection, the menu, the arcade list, stats, XP and the fuzz/lifecycle tests all pick it up automatically. Use `this.rng` for all randomness so seeds stay reproducible, and never create timers or key listeners. The shell calls `update(dt)` and `handleInput(key)` for you.
 
+### Adding a LAN game
+
+1. Server side: implement `MpGameDefinition` / `MpMatch` (`src/mp/types.ts`) in `src/games/multiplayer/`. A match is synchronous, plain state. It validates every action, advances timers in `tick(now)`, returns a per-player view from `viewFor(playerId)` (never leak hidden state), handles `setPresence` for disconnects, and returns an `outcome()`. Register it in `MP_GAMES` (`src/mp/registry.ts`).
+2. Client side: implement `MpGameUi` (`src/ui/lan/types.ts`). It renders the view, turns keys into actions with `ctx.send`, and never decides outcomes. Register it in `src/ui/lan/game-uis.ts`.
+
+Lobby, networking, reconnection, spectators, rematches and party mode come for free.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
 
 ## Troubleshooting
@@ -381,10 +422,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
 | "needs an interactive terminal" | The arcade needs a TTY. Run it directly, not through a pipe |
 | Terminal left in a weird state after a crash | Run `reset` (macOS/Linux). VibeBreak restores the terminal on exit, Ctrl+C, SIGTERM and uncaught errors, so please report it with the seed |
 | Want a clean slate | `vibebreak reset` |
+| Friends can't join your LAN game | Same network? Allow Node.js through the host's firewall on private networks; use the address shown in the lobby. See [docs/LAN.md](docs/LAN.md#connection-troubleshooting) |
 | AI status missing, stale or wrong | `vibebreak doctor`, then see [Troubleshooting the AI status](#troubleshooting-the-ai-status) |
 
 ## Project docs
 
+- [LAN multiplayer guide](docs/LAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Custom games API](docs/CUSTOM_GAMES.md)
 - [Business plan](docs/BUSINESS_PLAN.md)

@@ -1,0 +1,22 @@
+
+ VIBEBREAK > LAN > room LCQZ                              2/8 players  ● online
+ ------------------------------------------------------------------------------
+ BATTLE   YOUR TURN   vs CaptainByte
+ CaptainByte fired at J3: miss.
+ YOUR FLEET                  TARGET GRID (CaptainByte)
+    A B C D E F G H I J         A B C D E F G H I J
+  1 D . . . . . . . . .       1 X . . . . . . . . .
+  2 D . . . . . . . . o       2 o . . . . . . . . .
+  3 . . . . . . . . . o       3 . . . . . . . . X .
+  4 . . . . . . . o . .       4 . . . . . . . . . .
+  5 . . . . . . . . . .       5 . . . . . . o . . .
+  6 . . . . . o . . . .       6 . . . . . . o . . .
+  7 C C C C C . . . R B       7 . . . . o . . . . .
+  8 . . S X S . . . R B       8 . . . . . . . . . .
+  9 . . . o . . . . R B       9 . . o . . . . . . .
+ 10 . o . . . . . . . B      10 . . . . . . . . . .
+ Yours    CCCCC BBBB RRR SSS DD   Enemy    CCCCC BBBB RRR SSS DD
+ Matei fired at G6: miss.
+ CaptainByte fired at J3: miss.
+ ------------------------------------------------------------------------------
+ [Arrows] aim  [Enter] fire  [B4 Enter] fire at a square  [Esc] menu

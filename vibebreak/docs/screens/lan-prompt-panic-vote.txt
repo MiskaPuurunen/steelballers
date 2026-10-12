@@ -1,0 +1,21 @@
+
+ VIBEBREAK > LAN > room RGUM                              3/8 players  ● online
+ ------------------------------------------------------------------------------
+ ╔═════════════════════════════ PROMPT PANIC ═════════════════════════════╗
+ ║ ROUND 1 / 5                                             PLAYERS: 3     ║
+ ║ Party Classics · Mild                                                  ║
+ ║                                                                        ║
+ ║ THE PROMPT WAS:                                                        ║
+ ║ A terrible name for a boat.                                            ║
+ ║                                                                        ║
+ ║ VOTE FOR YOUR FAVOURITE:                                               ║
+ ║ >  A  YAML, but the indentation is emotional.                          ║
+ ║    B  A language where every bug is a feature flag (yours)             ║
+ ║    C  Semicolon++: every line ends in three of them, for safety.       ║
+ ║                                                                        ║
+ ║ · Matei  · Ada  · Linus                                                ║
+ ║                                                                        ║
+ ║ TIME REMAINING: 0:30                                                   ║
+ ╚════════════════════════════════════════════════════════════════════════╝
+ ------------------------------------------------------------------------------
+ [Up/Down or A-H] choose  [Enter] vote  [N] skip timer  [Esc] menu

@@ -70,6 +70,11 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
   { id: 'four-on-the-floor', name: 'Four on the Floor', description: 'Clear four lines at once in Tetris.', check: (c) => roundStat(c, 'tetris', 'tetrises') >= 1 },
   { id: 'daily-driver', name: 'Daily Driver', description: 'Complete a daily challenge.', check: (c) => !!c.session?.daily },
   { id: 'chaos-agent', name: 'Chaos Agent', description: 'Finish a Chaos Mode round.', check: (c) => c.session?.modifierId === 'chaos' && c.result?.endReason !== 'quit' },
+  // LAN achievements are event-based (unlocked by recordLanMatch).
+  { id: 'lan-party', name: 'LAN Party', description: 'Finish a multiplayer match on your network.', check: () => false },
+  { id: 'admiral', name: 'Admiral', description: 'Win a game of LAN Battleship.', check: () => false },
+  { id: 'crowd-pleaser', name: 'Crowd Pleaser', description: 'Win a game of Prompt Panic.', check: () => false },
+  { id: 'pixel-picasso', name: 'Pixel Picasso', description: 'Win a game of Doodle Protocol.', check: () => false },
   // Rewarding leaving is deliberate: VibeBreak should be easy to put down.
   { id: 'back-to-work', name: 'Back to Work', description: 'Finish a round and quit straight back to your code.', check: () => false },
 ];
@@ -188,4 +193,33 @@ export function recordCustomRound(
   const newHighScore = result.score > 0 && (prev === null || result.score > prev);
   if (newHighScore) save.customScores[def.id] = { score: result.score, at: now.toISOString(), seed: session.seed };
   return { xpGained: 0, levelBefore: level, levelAfter: level, newHighScore, previousBest: prev, newAchievements: [] };
+}
+
+/* ------------------------------------------------------- LAN matches */
+
+export interface LanMatchSummary {
+  gameId: string;
+  won: boolean;
+  stats: Record<string, number>;
+}
+
+const LAN_WIN_ACHIEVEMENT: Record<string, string> = {
+  battleship: 'admiral',
+  'prompt-panic': 'crowd-pleaser',
+  'doodle-protocol': 'pixel-picasso',
+};
+
+/** Record a finished LAN match for the local player. Returns newly unlocked achievements. */
+export function recordLanMatch(save: SaveData, m: LanMatchSummary, now = new Date()): Achievement[] {
+  save.lan.matches++;
+  if (m.won) save.lan.wins++;
+  const gs = (save.lan.games[m.gameId] ??= { plays: 0, totals: {}, bests: {} });
+  gs.plays++;
+  for (const [k, v] of Object.entries(m.stats)) {
+    if (!Number.isFinite(v)) continue;
+    gs.totals[k] = (gs.totals[k] ?? 0) + v;
+    gs.bests[k] = Math.max(gs.bests[k] ?? -Infinity, v);
+  }
+  const ids = ['lan-party', ...(m.won && LAN_WIN_ACHIEVEMENT[m.gameId] ? [LAN_WIN_ACHIEVEMENT[m.gameId]] : [])];
+  return ids.filter((id) => unlock(save, id, now)).map((id) => getAchievement(id)!);
 }

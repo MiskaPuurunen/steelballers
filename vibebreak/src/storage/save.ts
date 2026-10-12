@@ -39,6 +39,15 @@ export interface Settings {
   theme: string;
   /** Ambient menu particles (snow, bubbles...). */
   animations: boolean;
+  /** Display name for LAN games (remembered between sessions). */
+  lanName?: string;
+}
+
+/** LAN multiplayer record (local only: results as reported by the host you played on). */
+export interface LanStats {
+  matches: number;
+  wins: number;
+  games: Record<string, GameStats>;
 }
 
 export interface SaveData {
@@ -56,6 +65,7 @@ export interface SaveData {
   /** Best scores for user-made Lua games, kept apart from the built-in ones. */
   customScores: Record<string, { score: number; at: string; seed: string }>;
   settings: Settings;
+  lan: LanStats;
 }
 
 export function defaultSave(now = new Date()): SaveData {
@@ -73,6 +83,7 @@ export function defaultSave(now = new Date()): SaveData {
     daily: {},
     customScores: {},
     settings: { color: 'auto', theme: 'classic', animations: true },
+    lan: { matches: 0, wins: 0, games: {} },
   };
 }
 
@@ -158,6 +169,15 @@ export function normalizeSave(raw: unknown): SaveData {
     s.settings.theme = raw.settings.theme;
   }
   if (isObj(raw.settings) && typeof raw.settings.animations === 'boolean') s.settings.animations = raw.settings.animations;
+  if (isObj(raw.settings) && typeof raw.settings.lanName === 'string' && raw.settings.lanName.length <= 64) s.settings.lanName = raw.settings.lanName;
+  if (isObj(raw.lan)) {
+    s.lan = { matches: num(raw.lan.matches), wins: num(raw.lan.wins), games: {} };
+    if (isObj(raw.lan.games)) {
+      for (const [k, v] of Object.entries(raw.lan.games)) {
+        if (isObj(v)) s.lan.games[k] = { plays: num(v.plays), totals: numRecord(v.totals), bests: numRecord(v.bests) };
+      }
+    }
+  }
   return s;
 }
 
