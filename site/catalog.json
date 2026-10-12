@@ -1,0 +1,321 @@
+{
+  "games": [
+    {
+      "id": "packet-catcher",
+      "title": "Packet Catcher",
+      "author": "vibebreak",
+      "price": "Free",
+      "disk": "blue",
+      "file": "games/packet-catcher.lua",
+      "genre": "Reflex",
+      "duration": 30,
+      "description": "Move the firewall to catch good packets and keep the malware out. The starter game, and a working reference for the whole Lua API.",
+      "controls": [
+        [
+          "Left/Right, A/D",
+          "move the firewall"
+        ]
+      ],
+      "cover": [
+        "  [OK]        [!!]",
+        "        [OK]",
+        "   [!!]          [OK]",
+        "",
+        "|      ======        |",
+        "+--------------------+"
+      ]
+    },
+    {
+      "id": "ping",
+      "title": "Ping",
+      "author": "vibebreak",
+      "price": "0.99€",
+      "disk": "red",
+      "file": "games/ping.lua",
+      "genre": "Arcade",
+      "duration": 45,
+      "description": "Solo pong. Every bounce is worth more than the last, and the ball speeds up as the rally grows.",
+      "controls": [
+        [
+          "Left/Right, A/D",
+          "move the paddle"
+        ]
+      ],
+      "cover": [
+        "+--------------------+",
+        "|         o          |",
+        "|           .        |",
+        "|             .      |",
+        "|                .   |",
+        "|   ======           |"
+      ]
+    },
+    {
+      "id": "key-rain",
+      "title": "Key Rain",
+      "author": "vibebreak",
+      "price": "1.49€",
+      "disk": "yellow",
+      "file": "games/key-rain.lua",
+      "genre": "Typing",
+      "duration": 40,
+      "description": "Home-row letters fall from the sky. Type them before they land. The lower a key is when you zap it, the fewer points you get.",
+      "controls": [
+        [
+          "A S D F J K L",
+          "zap the lowest matching key"
+        ]
+      ],
+      "cover": [
+        "   a      k     f",
+        "       j      s",
+        "  d       l       a",
+        "        f    K",
+        "",
+        "+====================+"
+      ]
+    },
+    {
+      "id": "coffee-break",
+      "title": "Coffee Break",
+      "author": "vibebreak",
+      "price": "0.99€",
+      "disk": "black",
+      "file": "games/coffee-break.lua",
+      "genre": "Timing",
+      "duration": 30,
+      "description": "Stop the pour while the marker is over the cup. The cup shrinks as you go, and a centred pour scores double.",
+      "controls": [
+        [
+          "Space",
+          "stop the pour"
+        ]
+      ],
+      "cover": [
+        "         V",
+        "  ------====------",
+        "",
+        "       ( (",
+        "        ) )",
+        "     ........",
+        "     |      |]",
+        "     `------'"
+      ]
+    }
+  ],
+  "themes": [
+    {
+      "id": "classic",
+      "name": "Classic",
+      "price": "Free",
+      "description": "The original cyan and magenta terminal look.",
+      "tagline": "YOUR AI IS THINKING. YOU'RE PLAYING.",
+      "vibe": [
+        "#5fe1e6"
+      ],
+      "brk": [
+        "#e070e0"
+      ],
+      "muted": "#7d8590",
+      "rule": "-",
+      "ruleColors": [
+        "#7d8590"
+      ],
+      "particles": ""
+    },
+    {
+      "id": "christmas",
+      "name": "Christmas",
+      "price": "0.99€",
+      "description": "Candy-cane logo, twinkling light strings and falling snow.",
+      "tagline": "YOUR AI IS WRAPPING PRESENTS. YOU'RE PLAYING.",
+      "vibe": [
+        "#ff0000",
+        "#ffffff"
+      ],
+      "brk": [
+        "#008700",
+        "#00af00",
+        "#00d700"
+      ],
+      "muted": "#bcbcbc",
+      "rule": "-o",
+      "ruleColors": [
+        "#008700",
+        "#ff0000",
+        "#008700",
+        "#ffd700",
+        "#008700",
+        "#0087ff"
+      ],
+      "particles": "* . + '",
+      "particleColors": [
+        "#ffffff",
+        "#e4e4e4"
+      ]
+    },
+    {
+      "id": "halloween",
+      "name": "Halloween",
+      "price": "0.99€",
+      "description": "Pumpkin orange and witchy purple, with bats on the wing.",
+      "tagline": "YOUR AI IS BREWING SOMETHING SPOOKY. YOU'RE PLAYING.",
+      "vibe": [
+        "#ffaf00",
+        "#ff8700",
+        "#ff8700",
+        "#ff5f00",
+        "#d75f00",
+        "#af5f00"
+      ],
+      "brk": [
+        "#d787ff",
+        "#af5fff",
+        "#af00ff",
+        "#8700ff",
+        "#5f00af",
+        "#5f0087"
+      ],
+      "muted": "#6c6c6c",
+      "rule": "~-",
+      "ruleColors": [
+        "#ff8700",
+        "#8700ff"
+      ],
+      "particles": "v ^ .",
+      "particleColors": [
+        "#8700ff",
+        "#ff8700"
+      ]
+    },
+    {
+      "id": "frutiger-aero",
+      "name": "Frutiger Aero",
+      "price": "1.49€",
+      "description": "Glossy aqua skies, fresh green and rising bubbles. Very 2007.",
+      "tagline": "YOUR AI IS SYNCING TO THE CLOUD. YOU'RE PLAYING.",
+      "vibe": [
+        "#d7ffff",
+        "#afffff",
+        "#87ffff",
+        "#5fffff",
+        "#00d7ff",
+        "#00afd7"
+      ],
+      "brk": [
+        "#d7ffd7",
+        "#afffaf",
+        "#87ff87",
+        "#87d75f",
+        "#5fd75f",
+        "#5faf00"
+      ],
+      "muted": "#87afd7",
+      "rule": "=",
+      "ruleColors": [
+        "#00afff",
+        "#00d7ff",
+        "#00ffff",
+        "#afffff",
+        "#00ffff",
+        "#00d7ff"
+      ],
+      "particles": "o O . o",
+      "particleColors": [
+        "#afffff",
+        "#d7ffff"
+      ]
+    },
+    {
+      "id": "synthwave",
+      "name": "Synthwave",
+      "price": "1.49€",
+      "description": "Neon sunset gradient over a starfield. Turn the bass up.",
+      "tagline": "YOUR AI IS DRIVING INTO THE SUNSET. YOU'RE PLAYING.",
+      "vibe": [
+        "#ffff00",
+        "#ffd700",
+        "#ffaf00",
+        "#ff8700",
+        "#ff5f5f",
+        "#ff0087"
+      ],
+      "brk": [
+        "#ff00ff",
+        "#ff00d7",
+        "#d700ff",
+        "#af00ff",
+        "#8700ff",
+        "#5f00ff"
+      ],
+      "muted": "#875faf",
+      "rule": "=",
+      "ruleColors": [
+        "#ff00ff",
+        "#d700ff",
+        "#af00ff",
+        "#8700ff",
+        "#5f5fff",
+        "#0087ff"
+      ],
+      "particles": ". + * .",
+      "particleColors": [
+        "#00ffff",
+        "#ff87ff"
+      ]
+    },
+    {
+      "id": "matrix",
+      "name": "Matrix",
+      "price": "0.99€",
+      "description": "Green phosphor and digital rain. Wake up, Neo.",
+      "tagline": "YOUR AI IS IN THE MATRIX. YOU'RE PLAYING.",
+      "vibe": [
+        "#005f00",
+        "#008700",
+        "#00af00",
+        "#00d700",
+        "#00ff00",
+        "#5fff00"
+      ],
+      "brk": [
+        "#005f00",
+        "#008700",
+        "#00af00",
+        "#00d700",
+        "#00ff00",
+        "#5fff00"
+      ],
+      "muted": "#008700",
+      "rule": "01",
+      "ruleColors": [
+        "#008700",
+        "#005f00"
+      ],
+      "particles": "0 1 { } < > / ; $",
+      "particleColors": [
+        "#00ff00",
+        "#00af00"
+      ]
+    },
+    {
+      "id": "amber",
+      "name": "Amber CRT",
+      "price": "0.99€",
+      "description": "Warm monochrome phosphor, like a 1983 terminal.",
+      "tagline": "YOUR AI IS WARMING UP THE TUBES. YOU'RE PLAYING.",
+      "vibe": [
+        "#ffaf00"
+      ],
+      "brk": [
+        "#ff8700"
+      ],
+      "muted": "#af8700",
+      "rule": "-",
+      "ruleColors": [
+        "#af8700"
+      ],
+      "particles": ""
+    }
+  ]
+}
