@@ -113,6 +113,8 @@ for game, keys in [
     ('codesprint', 'git status'),
     ('stack', '    '),
     ('dungeon', ['\x1b[C', '\x1b[C', '\x1b[B', 'd', 'd', 's']),
+    ('crossy', ['\x1b[A', 'w', 'a', 'd']),
+    ('tetris', ['\x1b[D', '\x1b[A', 'z', 's', ' ', 'd', ' ']),
 ]:
     print(f'play --game {game}')
     s = Session(['play', '--game', game, '--duration', '15', '--seed', 'SMOKE-1'], home)
@@ -168,6 +170,69 @@ check(s.has('unreadable'), 'menu shows recovery notice', s)
 s.send('q', 0.2)
 check(s.wait_exit() == 0, 'exit after recovery')
 check(any(n.startswith('save.json.corrupt-') for n in os.listdir(home)), 'corrupt file backed up')
+
+print('AI status: real hook processes -> live HUD, no key pressed')
+import subprocess
+def hook(payload):
+    env = dict(os.environ, VIBEBREAK_HOME=home)
+    p = subprocess.run(['node', os.path.join(ROOT, 'dist/cli/index.js'), 'hook'], input=json.dumps(payload).encode(),
+                       env=env, capture_output=True, timeout=10)
+    return p.returncode, p.stdout
+s = Session(['play', '--game', 'tetris', '--duration', '60', '--seed', 'AI-SMOKE'], home)
+s.pump(0.6)
+s.send('\r', 0.6)
+check(s.has('no agent activity seen'), 'status line shows "no activity" before any event', s)
+base = {'session_id': 'smoke-session-1', 'cwd': '/home/dev/myproject', 'transcript_path': '/nonexistent'}
+code, out = hook({**base, 'hook_event_name': 'UserPromptSubmit', 'prompt': 'SECRET PROMPT', 'prompt_id': 'p1'})
+check(code == 0 and out == b'', f'hook exits 0 with no stdout (code {code}, {len(out)} bytes)')
+s.pump(1.0)
+check(s.has('AI THINKING') and s.has('myproject'), 'THINKING shown within 1s', s)
+hook({**base, 'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', 'tool_use_id': 'tu1', 'tool_input': {'command': 'npm test'}})
+s.pump(1.0)
+check(s.has('AI WORKING') and s.has('running Bash'), 'WORKING (running Bash) shown', s)
+hook({**base, 'hook_event_name': 'PermissionRequest', 'tool_name': 'Edit'})
+s.pump(1.0)
+check(s.has('NEEDS YOU'), 'permission request shows NEEDS YOU', s)
+hook({**base, 'hook_event_name': 'PostToolUse', 'tool_name': 'Bash', 'tool_use_id': 'tu1'})
+hook({**base, 'hook_event_name': 'Stop'})
+s.pump(1.0)
+check(s.has('AI DONE'), 'Stop shows DONE', s)
+dump(s, 'ai-status')
+check(s.has('NEXT') and s.has('LINES'), 'Tetris board intact alongside status line', s)
+s.send('p', 0.4)
+check(s.has('PAUSED'), 'Tetris: P pauses', s)
+s.send('p', 0.4)
+check(not s.has('PAUSED'), 'Tetris: P resumes', s)
+s.send('q', 1.0)
+check(s.has('ROUND ENDED EARLY'), 'Tetris: Q ends the round', s)
+s.send('q', 0.2)
+check(s.wait_exit() == 0, 'exit after AI status run')
+stored = ''.join(open(os.path.join(dp, f)).read() for dp, _, fs in os.walk(home) for f in fs if not f.endswith('.json') or 'agent' in dp)
+check('SECRET PROMPT' not in stored and 'npm test' not in stored, 'no prompt text or tool input stored')
+doc = subprocess.run(['node', os.path.join(ROOT, 'dist/cli/index.js'), 'doctor'], env=dict(os.environ, VIBEBREAK_HOME=home, NO_COLOR='1'), capture_output=True, timeout=10).stdout.decode()
+check('Receiving    yes' in doc and 'smoke-se' in doc, 'doctor reports events received and the session', None)
+if 'Receiving    yes' not in doc: print(doc)
+
+print('themes')
+s = Session(['--theme', 'christmas'], home)
+s.pump(1.2)
+check(s.has('WRAPPING PRESENTS'), 'christmas tagline via --theme', s)
+check(b'38;5;' in s.raw, '256-colour shades used in a 256-colour terminal')
+dump(s, 'theme-christmas')
+s.send('5', 0.4)
+check(s.has('THEMES') and s.has('Frutiger Aero'), 'THEMES screen opens', s)
+s.send('4', 0.4)
+s.send('\r', 0.6)
+check(s.has('SYNCING TO THE CLOUD'), 'picking Frutiger Aero applies it', s)
+dump(s, 'theme-aero')
+s.send('q', 0.2)
+check(s.wait_exit() == 0, 'exit after theme change')
+save = json.load(open(os.path.join(home, 'save.json')))
+check(save['settings'].get('theme') == 'frutiger-aero', 'theme saved to settings')
+out = subprocess.run(['node', os.path.join(ROOT, 'dist/cli/index.js'), 'theme', 'halloween'], env=dict(os.environ, VIBEBREAK_HOME=home), capture_output=True, timeout=10)
+check(out.returncode == 0 and json.load(open(os.path.join(home, 'save.json')))['settings']['theme'] == 'halloween', 'vibebreak theme <id> saves')
+bad = subprocess.run(['node', os.path.join(ROOT, 'dist/cli/index.js'), 'play', '--theme', 'nope'], env=dict(os.environ, VIBEBREAK_HOME=home), capture_output=True, timeout=10)
+check(bad.returncode == 2 and b'unknown theme' in bad.stderr, 'unknown --theme is rejected')
 
 print()
 if failures:

@@ -18,16 +18,20 @@ src/
                 modifiers.ts   modifier + difficulty tables -> concrete Effects
                 base-game.ts   BaseGame: round clock, scoring w/ multipliers, feedback, end state
                 progression.ts XP curve, achievements, recordRound()
-  games/        bugbash.ts snake.ts codesprint.ts stack.ts dungeon.ts, index.ts (registry)
+  games/        bugbash.ts snake.ts codesprint.ts stack.ts dungeon.ts crossy.ts tetris.ts, index.ts (registry)
   ui/           terminal.ts    TerminalIO: NodeTerminal (real) and FakeTerminal (tests)
                 screen.ts      line-diffing renderer with synchronized updates
                 keys.ts        raw stdin -> Key events (CSI/SS3 arrows, ctrl chars, paste)
-                style.ts       16-colour ANSI palette with NO_COLOR/TTY fallback, width helpers
+                style.ts       ANSI palette (16 colours, optional 256) with NO_COLOR/TTY fallback, width helpers
+                themes.ts      theme registry, palette swap, themed rules, stateless particle field + margin overlay
                 layout.ts      logo, HUD, bars, centering helpers
                 app.ts         the arcade shell: one state machine, one loop, one input handler
                 stats-view.ts  stats screen shared with `vibebreak stats`
   storage/      save.ts        config dir per OS, atomic JSON save, validation, corruption backup
-  integrations/ agent-status.ts  hook entry point + status file watcher
+  integrations/ agent-model.ts   typed AI-status state machine + staleness rules (pure)
+                agent-status.ts  per-session event store, hook entry, AgentMonitor (consumer)
+                claude-settings.ts, launcher.ts  hook install/inspect, auto-launch
+  cli/          hook.ts        fast hook path (loads no UI); doctor.ts `vibebreak doctor`
 tests/          vitest suites (unit, lifecycle fuzzing, app flow with a fake terminal + clock)
 scripts/        pty-smoke.py   real pseudo-terminal end-to-end smoke test
 ```
@@ -67,7 +71,7 @@ The `GameContext` passed to `create()` contains a forked `Rng`, the difficulty, 
 
 A single state machine: `menu → arcade → briefing → playing (paused?) → results`, plus `stats`.
 
-- **One loop.** One `setInterval` at about 30 fps calls `tick()`. `tick()` computes `dt`, advances the briefing countdown or the game, polls the agent beacon once a second, animates the results count-up and renders. `quit()` clears the interval, and a test asserts no timer remains.
+- **One loop.** One `setInterval` at about 30 fps calls `tick()`. `tick()` computes `dt`, advances the briefing countdown or the game, re-scans agent session files every 500 ms (the status line is redrawn every frame, so ages tick and staleness shows with no input), animates the results count-up and renders. `quit()` clears the interval, and a test asserts no timer remains.
 - **One input handler.** stdin data is parsed into `Key`s and dispatched by state. Ctrl+C is handled before any game sees the key.
 - **Debouncing.** Menus ignore a second Enter within 150 ms. The results screen ignores keys for 600 ms after a round ends, so a mashed key can't skip your score. Bug Bash and Stack Overflow ignore immediate repeats of the key that just scored or dropped.
 - **Too-small terminals.** If the window is smaller than the game's `minSize` plus the HUD, the game is paused (its clock does not advance) and a resize hint is shown. Every game fits 80×24.
@@ -101,17 +105,43 @@ The game itself gets `new Rng(seed).fork('game:<id>')`, so the same seed always 
 ## Agent integration
 
 ```
-Claude Code ──hook (async, exit 0, no stdout)──▶ vibebreak hook ──writes──▶ agent-status.json
-                                                                                 │ (mtime poll, 1/s)
-                                         VibeBreak in another terminal ◀──────────┘ HUD badge
+Claude Code ──hook (async, exit 0, no stdout)──▶ vibebreak hook (cli/hook.ts, loads no UI)
+   parseHookPayload (metadata only) → lock(session) → applyEvent → tmp+rename
+        ▼
+   agent/sessions/<session_id>.json    agent/health.json    agent/events.log (debug only)
+        │ AgentMonitor.poll() every 500 ms (re-reads only files whose mtime changed)
+        ▼
+   deriveView(record, now) → pickPrimary(views) → App status line (its own row, every frame)
 ```
 
-`vibebreak hook` reads stdin with a 1-second timeout and parses only `hook_event_name`. It maps `UserPromptSubmit` to *working*, `Stop`/`StopFailure` to *done*, `Notification` to *attention* and `SessionEnd` to *idle*, writes `{state, event, at, agent}` atomically, and exits 0 silently. The hook path skips everything else (no save load, no colour setup) and calls `process.exit` so it can't linger. Statuses older than 30 minutes are ignored.
+**Root cause of the old stale status (v1).** There was one global `agent-status.json`, written last-writer-wins from four events. That caused four problems:
+
+1. Concurrent sessions overwrote each other.
+2. A permission `Notification` left "needs you" on screen until `Stop`, usually for the rest of the turn.
+3. An Esc interrupt fires no `Stop`, so "working" stayed for 30 minutes.
+4. Async hooks are separate processes with no ordering guarantee, and each one stamped its write with its *finish* time, so a slow earlier hook could overwrite a newer state.
+
+**State machine (`agent-model.ts`).**
+
+- **Ordering:** each event carries its hook process's *spawn* time. Only events at least as new as the one that set the current status may change it; older ones still update tool bookkeeping.
+- **Tool tracking:** in-flight tools are tracked by `tool_use_id` (parallel calls work). Recently finished ids are remembered, so a late `PreToolUse` can't resurrect a call.
+- **Turns:** a new `UserPromptSubmit` clears stale completion, errors and orphaned tools.
+- **Duplicates:** an event is a duplicate if it shares a `prompt_id`/`tool_use_id`, or (for id-less events) arrives within 250 ms of an identical event with nothing in between.
+- **Mapping:** the event-to-status table is in the README. Unknown future events count as activity only.
+
+**Derived view.** Silence makes a status less certain, never "completed". An active turn becomes *inferred* after 3 minutes without activity and UNKNOWN after 20. COMPLETED/ERROR settle to IDLE after 30 minutes. The transcript file's mtime counts as activity. The limits can be set with the `VIBEBREAK_AGENT_*_SEC` environment variables.
+
+**Transport.**
+
+- **Files and locking:** one file per session. An O_EXCL lock file serialises one session's hook processes (broken after 3 s; on timeout the hook writes anyway rather than drop the event). Writes are atomic, with retries for Windows `EPERM`/`EBUSY` on rename. A test spawns six concurrent writer processes and checks that no event is lost.
+- **Malformed data:** malformed payloads and unreadable files are counted and reported by `doctor`, never fatal.
+- **Cleanup:** session files are garbage-collected after 7 days, and orphaned temp/lock files after 1 minute.
+- **Hook process:** the hook path calls `process.exit` so it can't linger.
 
 ### Future integration points
 
-- **Auto-launch.** A `vibebreak hook --launch` that opens a new terminal tab (`wt.exe -w 0 nt`, `osascript` for Terminal or iTerm, `$TERMINAL -e` on Linux) on `UserPromptSubmit`, rate-limited and opt-in. This was deferred: the behaviour differs on every platform, and stealing focus mid-thought is a real risk.
-- **Other agents.** The beacon only needs a command that writes the status file, so Codex or Aider wrappers can call `vibebreak hook` with the same JSON shape (`{"hook_event_name":"UserPromptSubmit"}`).
+- **Auto-launch (implemented, opt-in).** `vibebreak hook --launch` (`src/integrations/launcher.ts`) runs on `UserPromptSubmit`. `planLaunch()` is a pure function that picks a Windows Terminal split, a tmux split, an iTerm2 split, Terminal.app, `$TERMINAL`, or a new console window. The child is spawned detached and unref'd with no stdio. `arcade.lock` (pid plus a liveness check) prevents duplicates, and `last-launch.json` enforces a 60-second gap. Launched sessions use `play --from-hook`, which shortens the countdown to 2 seconds.
+- **Other agents.** `vibebreak hook` accepts any JSON with `hook_event_name` and `session_id`. The model encodes *Claude Code* event semantics, so another agent should go through a small adapter that maps its own events onto those meanings, not be assumed identical. Auto-launched games receive `--agent-session <id>` and follow that session.
 - **Agent-aware rounds.** An optional mode that ends the round gracefully (with the usual warning) when the agent reports *done*.
 
 ## Testing strategy
@@ -121,4 +151,4 @@ Claude Code ──hook (async, exit 0, no stdout)──▶ vibebreak hook ──
 | Pure logic | Unit tests for the RNG, session generator, every game's rules (scoring, combos, collisions, alignment, typing accuracy, dungeon connectivity), progression, storage, the arg parser and the key parser |
 | Robustness | Each game is fuzzed with random input over 25 seeds and random modifiers. The tests check it never throws, that render lines fit `minSize`, that the round ends on time and that the game is inert afterwards, plus reproducibility and an 80×24 fit check |
 | App flow | `App` is driven with `FakeTerminal` and `FakeScheduler`: full menu-to-results flow, pause clock freeze, restart, reroll, resize pause, stats reset, Ctrl+C timer cleanup and the frame-diff size |
-| Real terminal | `scripts/pty-smoke.py` runs the built binary in a PTY with a VT100 emulator: menus, all five games, pause, the time limit, Ctrl+C exit code and terminal restoration, resize, daily, and corrupted-save recovery |
+| Real terminal | `scripts/pty-smoke.py` runs the built binary in a PTY with a VT100 emulator: menus, all seven games, pause, the time limit, Ctrl+C exit code and terminal restoration, resize, daily, and corrupted-save recovery |

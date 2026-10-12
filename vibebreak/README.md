@@ -4,11 +4,12 @@
 
 VibeBreak is a terminal arcade for developers who work with AI coding agents like Claude Code and Codex. While the agent writes, debugs or refactors, you play a 20–60 second keyboard game in your terminal instead of opening social media. When the round ends you get your score, some XP, and a one-key exit back to work.
 
-- **5 minigames:** Bug Bash, Terminal Snake, Code Sprint, Stack Overflow and Dependency Dungeon.
+- **7 minigames:** Bug Bash, Terminal Snake, Code Sprint, Stack Overflow, Dependency Dungeon, Crossy Prod and Tetris.
 - **Random sessions:** each round rolls a game, a difficulty and a modifier such as *Overclocked*, *Glass Cannon* or *Chaos Mode*. Runs are seeded, so any session can be replayed exactly.
 - **Daily challenge:** one seed per day, the same for everyone, with a share card you can paste.
-- **Progression:** high scores, XP, levels and 13 achievements. All of it is stored locally, with no account and no telemetry.
-- **Optional Claude Code integration:** the HUD shows *AI working / AI done* while you play in another terminal.
+- **Progression:** high scores, XP, levels and 15 achievements. All of it is stored locally, with no account and no telemetry.
+- **Optional Claude Code integration:** a status line shows what Claude is doing (thinking, running a tool, waiting for you, done) while you play, per session, with how fresh the information is.
+- **Themes:** Classic, Christmas, Halloween, Frutiger Aero, Synthwave, Matrix and Amber CRT, plus a Seasonal option that switches by date. Each theme recolours the whole arcade and adds its own ambient effects (snow, bats, bubbles, digital rain…) around the menus.
 - **Zero runtime dependencies.** Node 18+ on Windows Terminal/PowerShell, macOS and Linux.
 
 ```
@@ -47,7 +48,27 @@ vibebreak           # or: node dist/cli/index.js
 
 Without `npm link`, run `npm start` for the menu, or `node dist/cli/index.js play`.
 
+**Windows PowerShell 5.1** (the built-in one) doesn't support `&&`. Run the commands one per line, or separate them with `;`:
+
+```powershell
+npm install; npm run build; node dist/cli/index.js
+```
+
+PowerShell 7+ and Windows Terminal with PowerShell 7 accept `&&` as written.
+
 During development, `npm run dev -- play --game snake` runs the TypeScript source directly through `tsx` with no build step.
+
+### For everyone else: one command, no clone (once published to npm)
+
+```bash
+npx vibebreak-cli play          # try it instantly
+npm install -g vibebreak-cli    # keep it: then just `vibebreak`
+vibebreak hook install --launch # optional: auto-open a game whenever Claude starts working
+```
+
+The package is named `vibebreak-cli` because `vibebreak` on npm belongs to an unrelated project. The command you type is still `vibebreak`. To publish: `npm login`, then `npm publish` from this folder (`prepublishOnly` runs the typecheck, the tests and the build first).
+
+Use a global install for the hook setup. `npx` runs from a temporary cache, so the hook paths would point somewhere that can disappear.
 
 ## Commands
 
@@ -55,7 +76,7 @@ During development, `npm run dev -- play --game snake` runs the TypeScript sourc
 |---|---|
 | `vibebreak` | Open the arcade menu |
 | `vibebreak play` | Start a random minigame right away (a short briefing counts down first) |
-| `vibebreak play --game snake` | Play a specific game: `bugbash`, `snake`, `codesprint`, `stack`, `dungeon` |
+| `vibebreak play --game snake` | Play a specific game: `bugbash`, `snake`, `codesprint`, `stack`, `dungeon`, `crossy`, `tetris` |
 | `vibebreak play --duration 30` | Set the round's time limit in seconds (15–300) |
 | `vibebreak play --random --duration 30` | Explicit random game (`play` is random by default) |
 | `vibebreak play --seed K7Q2-M9XA` | Replay an exact session |
@@ -63,8 +84,13 @@ During development, `npm run dev -- play --game snake` runs the TypeScript sourc
 | `vibebreak daily` | Today's seeded challenge (UTC date, the same for everyone) |
 | `vibebreak list` | List games and modifiers |
 | `vibebreak stats` | Scores, level and achievements (`--json` for raw data) |
+| `vibebreak theme` / `vibebreak theme <id>` | List the themes / set one (saved) |
+| `vibebreak --theme matrix` | Use a theme for this run only (works with any command) |
 | `vibebreak reset` | Erase local stats (asks for confirmation; `--yes` skips it) |
 | `vibebreak hook install` | Show how to connect Claude Code (optional) |
+| `vibebreak doctor` | Is the Claude Code integration configured, and is it actually receiving events? (`--json` too) |
+| `vibebreak hook status` | One-line summary of the AI status the HUD would show |
+| `vibebreak hook debug on\|off` | Log every status event and transition (no prompt text) for troubleshooting |
 | `vibebreak --help` / `--version` | Usage / version |
 
 **What `--duration` means:** it sets the round's maximum length. A round can end sooner, for example when the snake crashes or the tower topples. The HUD timer turns yellow at 10 seconds left, and the last 5 seconds are counted down on screen, so a round never stops without warning. Each game has its own default (30–60s). The daily challenge always uses the default so scores can be compared.
@@ -96,6 +122,46 @@ A block slides back and forth. Press **Space** to drop it. Any overhang is slice
 ### Dependency Dungeon: mini roguelike (60s)
 A turn-based dungeon, procedurally generated on every run. Collect every dependency `&`, then *publish* at the `>` gate. Bump into bugs (`b` flaky test, `n` NaN, `G` God Object) to fight them. Watch out for `^` breaking changes (traps), pick up `+` hotfix patches to heal, and collect `*` GitHub stars for points. Fog of war rewards exploration, and enemies chase you once you're close. Wild bugs can also spawn mid-run. Every map is checked for connectivity: the exit and all items are always reachable, and enemies never start within 6 steps of you.
 
+### Crossy Prod: endless hopper (45s)
+A Crossy Road-style run. Hop your `{}` hotfix forward with **arrows, WASD or HJKL** (Space also hops forward). Dodge `<==` CI pipelines on the roads, ride `[]` logs across the `~~` data lake (miss one and you sink, ride it off-screen and you're swept out of scope), and get off the tracks when the rail's edge flashes `!` because the release train doesn't stop. Trees `/\` block your path and `$$` coins are worth bonus points. Every new lane scores, and the world is generated forever ahead of you. Stand still too long and a code reviewer swoops in: the HUD's *REVIEW IN* timer resets each time you reach a new lane. Grass lanes are checked so trees can never wall you in.
+
+### Tetris: block puzzle (90s)
+The classic, in plain ASCII. All seven tetrominoes come from a **7-bag** randomizer, so every seven pieces contain each shape once, and the seed reproduces the exact sequence. It uses SRS rotation with wall and floor kicks, a ghost piece `::` showing where the piece will land, a two-piece NEXT preview, and a 500 ms lock delay that resets when you move or rotate (up to 15 times).
+
+| Key | Action |
+|---|---|
+| `←` `→` / `A` `D` | Move |
+| `↑` / `W` / `X` | Rotate clockwise |
+| `Z` | Rotate counterclockwise |
+| `↓` / `S` | Soft drop (+1 per row) |
+| `Space` | Hard drop (+2 per row) |
+| `P` | Pause / resume |
+| `R` | Restart the round |
+| `Q` / `Esc` | End the round (Q) or open the pause menu (Esc) |
+
+Clearing 1, 2, 3 or 4 lines at once scores 100, 300, 500 or 800 × level. You level up every 10 lines (Easy starts at level 1, Normal at 2, Hard at 4), and gravity follows the guideline curve, so pieces fall faster each level. If a new piece can't spawn, you've topped out and the game is over. The side panel shows score, level, lines and your personal best, and the controls stay on screen the whole time. The well is 10 × 16 rather than the usual 20 rows, so the game fits an 80 × 24 terminal with the HUD. Chaos Mode pushes up a garbage line every 12–18 seconds ("Merge conflict!"). Low Battery and Glass Cannon are never rolled for Tetris, because it has no lives or penalties.
+
+## Themes
+
+Open **[5] THEMES** from the menu. Moving the selection previews each theme live (logo, colours, effects). `Enter` keeps it, and `Esc` goes back to what you had. You can also run `vibebreak theme <id>`, or `--theme <id>` for a single run.
+
+| Theme | id | Look |
+|---|---|---|
+| Classic | `classic` | The original cyan and magenta (default) |
+| Christmas | `christmas` | Candy-cane logo, twinkling light-string separators, falling snow |
+| Halloween | `halloween` | Pumpkin orange and witchy purple, bats flapping across the screen |
+| Frutiger Aero | `frutiger-aero` | Glossy aqua-to-sky and grass-green gradients, rising bubbles, shimmering separators |
+| Synthwave | `synthwave` | Neon sunset gradient, magenta and cyan, twinkling stars |
+| Matrix | `matrix` | Green phosphor and falling digital rain |
+| Amber CRT | `amber` | Warm monochrome, like an 80s terminal |
+| Seasonal | `seasonal` | Christmas in December, Halloween from Oct 15 to Nov 1, Classic the rest of the year |
+
+- **What a theme changes:** the arcade's palette, the logo gradient, the separators, the menu tagline and ambient particles.
+- **Particles:** they only fill empty space around the menu, briefing, results and stats screens. They are never drawn on a game board.
+- **During play:** themes only recolour borders and separators, so games stay readable. Game pieces keep their own colours.
+- **Animation off:** press `A` on the THEMES screen to turn ambient animation off (saved).
+- **Colour depth:** themes use 256-colour shades when the terminal supports them (Windows Terminal, iTerm2, most Linux terminals; the THEMES screen shows what was detected). Otherwise they fall back to the 16 standard colours. `NO_COLOR` still turns colour off completely.
+
 ## Random sessions and modifiers
 
 Every round rolls a **game** (weighted, never the same game twice in a row), a **difficulty** (Easy / Normal / Hard), a **modifier** and game-specific content such as layouts, spawn timing, snippet order and dungeon maps. The briefing screen shows all of it, including the seed, before play starts. Press `R` to reroll.
@@ -116,9 +182,9 @@ Seeds are fully deterministic: `vibebreak play --seed K7Q2-M9XA` reproduces the 
 
 ## Progression
 
-- High score per game, plus game-specific personal bests (best combo, longest snake, top WPM, tallest tower, dungeon escapes).
+- High score per game, plus game-specific personal bests (best combo, longest snake, top WPM, tallest tower, dungeon escapes, farthest crossing, most lines).
 - XP comes from score (normalised per game), with bonuses for perfect rounds, new personal bests and the daily challenge. XP per round is capped, so skill matters more than grinding.
-- 13 achievements, including *Back to Work*: finish a round and quit straight back to your code. Leaving is rewarded on purpose.
+- 15 achievements, including *Back to Work*: finish a round and quit straight back to your code. Leaving is rewarded on purpose.
 - Nothing decays and there are no streak-loss mechanics. Stopping costs you nothing.
 
 ## Save file and configuration
@@ -138,49 +204,118 @@ Set `VIBEBREAK_HOME=/some/dir` to override the location. `vibebreak stats` print
 - Unknown or invalid fields are dropped, not trusted.
 - No network requests, telemetry or account, ever.
 
-Colour: VibeBreak respects `NO_COLOR` and `--no-color`, and falls back to plain text when output isn't a TTY or `TERM=dumb`. It uses only the 16 standard ANSI colours, so it looks right in Windows Terminal, PowerShell, macOS Terminal, iTerm2 and Linux terminals.
+Colour: VibeBreak respects `NO_COLOR` and `--no-color`, and falls back to plain text when output isn't a TTY or `TERM=dumb`. The Classic theme uses only the 16 standard ANSI colours, so it looks right in Windows Terminal, PowerShell, macOS Terminal, iTerm2 and Linux terminals. Other themes add 256-colour shades only where the terminal supports them.
 
 ## Claude Code integration (optional)
 
-VibeBreak is a standalone game first. The integration is a one-way **status beacon**. Claude Code hooks write a tiny status file, and VibeBreak, running in another terminal, shows `[AI working]`, `[AI needs you]` or a flashing `AI DONE` in its HUD. You decide when to stop playing; it never interrupts a round.
+VibeBreak is a standalone game first. The integration is a one-way **status beacon**. Claude Code hooks record lifecycle events, and VibeBreak, running in another terminal, shows a status line under the game (and on the menu and results screens):
+
+```
+ AI WORKING /  running Bash                               myproject 3f9c2a · 2s ago · +1 more
+```
+
+It shows the status, what Claude is doing, which project and session it refers to, and how long ago the last sign of activity was. If other sessions are active too, it adds "+N more". You decide when to stop playing; it never interrupts a round.
 
 ```bash
-vibebreak hook install    # prints the settings snippet and instructions
+vibebreak hook install --write   # adds the hooks to ~/.claude/settings.json (backup kept)
+vibebreak hook install           # or: print the snippet and paste it yourself / via /hooks
+vibebreak doctor                 # then check it is configured AND receiving events
 ```
 
-Add the printed snippet to `~/.claude/settings.json`, or add it via `/hooks` inside Claude Code:
+Restart Claude Code after installing (it reads settings at startup), then run `vibebreak` in a second terminal while Claude works. **If you installed an earlier version, re-run `vibebreak hook install --write`** (add `--launch` if you use auto-launch). Older installs only listened to four events, and `vibebreak doctor` will flag this.
 
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "vibebreak hook", "async": true, "timeout": 5 }] }],
-    "Stop":             [{ "hooks": [{ "type": "command", "command": "vibebreak hook", "async": true, "timeout": 5 }] }],
-    "Notification":     [{ "hooks": [{ "type": "command", "command": "vibebreak hook", "async": true, "timeout": 5 }] }],
-    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "vibebreak hook", "async": true, "timeout": 5 }] }]
-  }
-}
+### What the statuses mean
+
+| Shown | Status | Set by (Claude Code hook) | Meaning |
+|---|---|---|---|
+| `AI THINKING` | THINKING | `UserPromptSubmit`, or a tool finishing | Claude is working on your turn and no tool is running right now. Hooks can't tell reasoning from writing a reply, so both show as THINKING. |
+| `AI WORKING` | WORKING | `PreToolUse` | At least one tool call (Bash, Edit, an MCP tool…) has started and not finished. Parallel calls are tracked by `tool_use_id`. |
+| `AI NEEDS YOU` | WAITING_FOR_INPUT | `PermissionRequest`, `Notification` (`permission_prompt`, `elicitation_dialog`, `idle_prompt`) | A permission prompt or a question for you, or Claude finished a while ago and is waiting for your next prompt. It clears as soon as work resumes. |
+| `AI DONE` | COMPLETED | `Stop` | The turn finished. It flashes for a few seconds. |
+| `AI ERROR` | ERROR | `StopFailure` | The turn ended on an API error (rate limit, overload…). The next prompt clears it. |
+| `AI IDLE` | IDLE | `SessionStart`, `SessionEnd`, interrupted tool | No active task. |
+| `AI UNKNOWN` | UNKNOWN | (inferred) | A turn was active but nothing has been heard for a long time. VibeBreak has lost visibility, so it says so. |
+
+A trailing `?` (for example `AI WORKING?`, shown dimmed) means the status is **inferred**: no event has arrived for 3 minutes, so it is VibeBreak's best guess rather than something an event reported. Silence alone never turns into DONE. A long-running task stays WORKING (inferred) until 20 minutes without any activity, then shows UNKNOWN. While Claude is generating, the session transcript file's modification time also counts as activity. Completed and errored turns settle to IDLE after 30 minutes. You can tune these with `VIBEBREAK_AGENT_QUIET_SEC`, `VIBEBREAK_AGENT_LOST_SEC` and `VIBEBREAK_AGENT_SETTLE_SEC`.
+
+**Several sessions:** each Claude Code session has its own record. The line shows the session that most needs you (waiting, then error, then working, then done), and a game auto-launched by a session follows that session.
+
+### How it works
+
+```
+Claude Code ──hook (async, exit 0, no stdout)──▶ vibebreak hook ──locked write──▶ agent/sessions/<session_id>.json
+VibeBreak ──re-reads changed files every 0.5s, redraws the status line every frame──▶ HUD
 ```
 
-Then run `vibebreak` in a second terminal while Claude works.
+- **One file per session**, so sessions can't overwrite each other.
+- **Locking and atomic writes:** a short lock file serialises the hook processes of one session, and every write is temp-file + rename.
+- **Ordering:** async hooks run as parallel processes with no delivery-order guarantee. Each event is therefore stamped with the moment its hook process was spawned, and an older event can't overwrite a newer status.
+- **Duplicates and stale events:** duplicate deliveries (for example the same hook in two settings files) are ignored. A late `PreToolUse` from an earlier turn is dropped.
+- **Restarts and cleanup:** VibeBreak keeps no state that a restart could lose. Start it mid-task and it picks up the current status from disk. Session files untouched for a week are deleted.
+
+### Troubleshooting the AI status
+
+1. Run **`vibebreak doctor`**. It separates *configured* (hooks are in `settings.json`, with any missing events listed) from *receiving* (when the last event actually arrived). It also lists every session, its status, whether that status is reported or inferred, event counts, duplicate and late-event counts, and the last hook error.
+2. **Configured: no** → `vibebreak hook install --write`.
+3. **Configured: yes, Receiving: no** → restart Claude Code. Check the hook command's paths exist; `doctor` flags broken paths.
+4. **Status looks wrong** → `vibebreak hook debug on`, reproduce, then read `agent/events.log` in the VibeBreak config folder. It records each event, the transition (`THINKING -> WORKING`), whether the event was ignored and why, and the hook's delay. It is capped at 256 KB and rotated. `vibebreak hook debug off` stops it.
+
+### Limitations
+
+- **Esc interrupts fire no hook.** The [docs](https://code.claude.com/docs/en/hooks) say `Stop` doesn't run when you interrupt. An interrupted turn shows as THINKING/WORKING, then inferred, then UNKNOWN, until your next prompt resets it. If a running tool is aborted, `PostToolUseFailure` reports `is_interrupt` and the line shows IDLE (interrupted) right away.
+- **Internal states that hooks don't expose stay merged:** THINKING covers both reasoning and writing a reply, and a tool waiting for permission shows WORKING until the permission hook fires.
+- **No process liveness:** hooks expose no Claude Code process id, so a crashed session is only detected through silence (UNKNOWN), not instantly.
+- **Hook cost:** tool hooks start a short-lived Node process per tool call. It runs async, so Claude never waits for it, but it costs a little CPU.
+
+### Auto-launch: a game opens the moment Claude starts working
+
+```bash
+vibebreak hook install --launch --write
+```
+
+`--write` adds the hooks to `~/.claude/settings.json` for you. It keeps your other settings and hooks, saves a backup (`settings.json.vibebreak-backup`), and leaves a file it can't parse untouched. Leave out `--write` to just print the snippet and paste it yourself. `vibebreak hook uninstall --write` removes the hooks again.
+
+This prints the same snippet, except that `UserPromptSubmit` runs `hook --launch`. The printed commands use absolute paths to Node and VibeBreak, so they work even without `npm link`. From then on, every prompt you send Claude opens VibeBreak next to it with a random game, on a 2-second countdown:
+
+| Where Claude Code runs | What opens |
+|---|---|
+| Windows Terminal | A split pane on the right of the current tab (`wt -w 0 split-pane`) |
+| Other Windows consoles (e.g. the old PowerShell window, VS Code) | A new console window |
+| tmux (any OS) | A split pane (`tmux split-window -h`) |
+| macOS iTerm2 / Terminal.app | An iTerm2 split / a new Terminal window |
+| Linux desktop | `$VIBEBREAK_TERMINAL`, `$TERMINAL`, or `x-terminal-emulator -e` |
+
+Safeguards:
+
+- It never opens a second copy while one is already running (a lock file with a live-process check).
+- It won't relaunch within 60 seconds of the last launch.
+- The launch is fully detached, so the hook still returns instantly and prints nothing.
+- Quitting with `Q` closes the pane and puts you back next to Claude. The HUD shows `AI DONE` when Claude finishes, so you know when to stop.
+- To turn auto-launch off, remove `--launch` from the `UserPromptSubmit` entry.
+
+**Caveat:** the new pane or window takes keyboard focus. That's the point when you've just pressed Enter on a prompt, but it can surprise you if you're queueing several prompts quickly. The tmux and Windows Terminal paths are tested; the macOS and Linux-desktop paths are untested on real machines.
+
+**Instant play without hooks:**
+
+- In Windows Terminal, add a **New Pane** action bound to a key (Settings → Actions) with the command line `vibebreak play`. One keypress then opens a game beside Claude.
+- In tmux: `bind g split-window -h -l 45% 'vibebreak play'`.
 
 These choices were made against the current [Claude Code hooks documentation](https://code.claude.com/docs/en/hooks):
 
 - **`async: true`**: the hook runs in the background and cannot block Claude.
 - **Prints nothing and always exits 0.** For `UserPromptSubmit`, plain stdout would be added to Claude's context, and exit code 2 would block the prompt (for `Stop`, exit 2 would stop Claude from finishing). VibeBreak avoids both.
-- Reads only `hook_event_name` from the hook's stdin JSON. Prompt text and transcripts are never stored. The status file holds just `{state, event, at, agent}`.
-- Never approves tools, never touches permissions, never edits project files, never reads or writes the agent's terminal.
-- If the `vibebreak` binary is missing, Claude Code only shows a non-blocking hook error. To remove the integration, delete the four entries (`vibebreak hook uninstall` prints instructions).
+- **Stores event metadata only:** event name, session id, `prompt_id`, tool name, `tool_use_id`, notification type, error type, the project folder's name and the transcript path (whose modification time is used as a sign of life; the transcript itself is never read). It never stores prompt text, tool input or output, or messages, and a test enforces this.
+- Never approves tools, never touches permissions, never edits project files, never reads or writes the agent's terminal. `PermissionRequest` and `PreToolUse` hooks that exit 0 with no output leave the normal permission flow unchanged.
+- If the `vibebreak` binary is missing, Claude Code only shows a non-blocking hook error. To remove the integration: `vibebreak hook uninstall --write`.
 
-`vibebreak hook status` shows the last state that was recorded.
-
-**Not included (on purpose):** auto-launching a game window from a hook. Opening a new terminal works differently on every OS and terminal emulator, and doing it from inside an agent's lifecycle risks stealing focus or input. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#future-integration-points) for the planned approach.
+Auto-launch is opt-in because it moves keyboard focus. The status beacon on its own never does.
 
 ## Development
 
 ```bash
 npm install
 npm run dev              # run from source (tsx)
-npm test                 # vitest: 111 tests
+npm test                 # vitest: 210 tests
 npm run typecheck
 npm run build            # compile to dist/
 python3 scripts/pty-smoke.py   # real-terminal smoke test (needs: pip install pyte; npm run build)
@@ -194,11 +329,15 @@ The PTY smoke test launches the built CLI in a real pseudo-terminal, sends keyst
 - the time limit ends a round
 - shrinking the window shows the too-small notice
 - a corrupted save is recovered
+- the AI status end to end: real `vibebreak hook` processes fed documented hook payloads update a live Tetris HUD (THINKING → WORKING → NEEDS YOU → DONE) with no key pressed; the hook prints nothing; no prompt text is stored; `doctor` sees the session
+- Tetris's P / R / Q keys
+
+On Windows, run it inside WSL (it needs a Unix PTY).
 
 ### Adding a minigame
 
 1. Create `src/games/mygame.ts` with a class extending `BaseGame`. Implement `onKey`, `tick`, `render`, `hud`, `stats`, `metrics` and `isPerfect`, and use `addScore` / `penalize` / `flash` / `end`. `BaseGame` already handles the round clock, modifier multipliers and end-of-round state.
-2. Export a `GameDefinition` with `id`, `name`, `genre`, `tagline`, `controls`, `weight`, `defaultDurationSec`, `xpScale` and `create(ctx)`.
+2. Export a `GameDefinition` with `id`, `name`, `genre`, `tagline`, `controls`, `weight`, `defaultDurationSec`, `xpScale` and `create(ctx)`. Optionally add `appKeys` to map letters your game doesn't use to the arcade's pause/restart/quit, as Tetris does with P/R/Q. `ctx.personalBest` carries the player's best score for display.
 3. Add it to `GAMES` in `src/games/index.ts`.
 
 That's it. Random selection, the menu, the arcade list, stats, XP and the fuzz/lifecycle tests all pick it up automatically. Use `this.rng` for all randomness so seeds stay reproducible, and never create timers or key listeners. The shell calls `update(dt)` and `handleInput(key)` for you.
@@ -216,6 +355,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
 | "needs an interactive terminal" | The arcade needs a TTY. Run it directly, not through a pipe |
 | Terminal left in a weird state after a crash | Run `reset` (macOS/Linux). VibeBreak restores the terminal on exit, Ctrl+C, SIGTERM and uncaught errors, so please report it with the seed |
 | Want a clean slate | `vibebreak reset` |
+| AI status missing, stale or wrong | `vibebreak doctor`, then see [Troubleshooting the AI status](#troubleshooting-the-ai-status) |
 
 ## Project docs
 

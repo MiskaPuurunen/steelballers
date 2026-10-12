@@ -82,6 +82,8 @@ function gameHighlight(id: string, bests: Record<string, number>, totals: Record
     case 'codesprint': return theme.muted(`top speed ${b('wpm')} wpm`);
     case 'stack': return theme.muted(`tallest tower ${b('height')}`);
     case 'dungeon': return theme.muted(`escapes ${fmt(totals.escaped ?? 0)}`);
+    case 'tetris': return theme.muted(`most lines ${b('lines')}`);
+    case 'crossy': return theme.muted(`farthest ${b('distance')} lanes`);
     default: return '';
   }
 }

@@ -35,6 +35,10 @@ export interface DailyRecord {
 
 export interface Settings {
   color: 'auto' | 'always' | 'never';
+  /** Theme id, or 'seasonal'. Unknown ids fall back to the classic look. */
+  theme: string;
+  /** Ambient menu particles (snow, bubbles...). */
+  animations: boolean;
 }
 
 export interface SaveData {
@@ -65,7 +69,7 @@ export function defaultSave(now = new Date()): SaveData {
     history: [],
     lastGameId: null,
     daily: {},
-    settings: { color: 'auto' },
+    settings: { color: 'auto', theme: 'classic', animations: true },
   };
 }
 
@@ -140,6 +144,10 @@ export function normalizeSave(raw: unknown): SaveData {
   if (isObj(raw.settings) && ['auto', 'always', 'never'].includes(raw.settings.color as string)) {
     s.settings.color = raw.settings.color as Settings['color'];
   }
+  if (isObj(raw.settings) && typeof raw.settings.theme === 'string' && /^[a-z0-9-]{1,32}$/.test(raw.settings.theme)) {
+    s.settings.theme = raw.settings.theme;
+  }
+  if (isObj(raw.settings) && typeof raw.settings.animations === 'boolean') s.settings.animations = raw.settings.animations;
   return s;
 }
 

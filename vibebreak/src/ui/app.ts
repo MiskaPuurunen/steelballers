@@ -5,15 +5,18 @@ import { getModifier, DIFFICULTIES } from '../core/modifiers.js';
 import { levelProgress, recordRound, unlock, getAchievement, type RoundSummary } from '../core/progression.js';
 import { GAMES } from '../games/index.js';
 import type { SaveData, SaveStore } from '../storage/save.js';
-import type { AgentWatcher } from '../integrations/agent-status.js';
+import type { AgentMonitor, AgentSnapshot } from '../integrations/agent-status.js';
+import type { AiStatus, StatusView } from '../integrations/agent-model.js';
 import type { TerminalIO } from './terminal.js';
 import { Screen } from './screen.js';
 import { isCtrlC, parseKeys } from './keys.js';
-import { c, theme, tone, visibleWidth } from './style.js';
+import { c, getColorDepth, theme, tone, visibleWidth } from './style.js';
 import {
   bar, centerBlock, centerVertically, fmt, fmtTime, hudLine, keyHint, logo, padRight, rule, spread,
 } from './layout.js';
 import { statsLines } from './stats-view.js';
+import { THEMES, SEASONAL, activeTheme, applyTheme, overlayParticles, particleCells, resolveTheme, seasonalTheme, themeIds, type ThemeDef } from './themes.js';
+import { paint } from './style.js';
 
 /* ------------------------------------------------------------------ deps */
 
@@ -41,11 +44,17 @@ export interface AppOptions {
   start: StartMode;
   games?: readonly GameDefinition[];
   scheduler?: Scheduler;
-  agent?: AgentWatcher | null;
+  agent?: AgentMonitor | null;
+  /** Wall clock for event ages (tests inject a fake). */
+  wallNow?: () => number;
   /** Notice shown on the menu (e.g. recovered from a corrupted save). */
   notice?: string;
   /** Frame interval in ms. */
   frameMs?: number;
+  /** Briefing auto-start countdown in ms. */
+  countdownMs?: number;
+  /** Theme for this run only (--theme); otherwise the saved setting. */
+  themeOverride?: string;
 }
 
 export interface ExitInfo {
@@ -78,19 +87,22 @@ type State =
       lockMs: number;
       saved: boolean;
     }
-  | { kind: 'stats'; confirmReset: boolean };
+  | { kind: 'stats'; confirmReset: boolean }
+  | { kind: 'themes'; sel: number; revertTo: ThemeDef };
 
 const MENU_ITEMS: Array<{ key: string; label: string; hint: string }> = [
   { key: '1', label: 'QUICK PLAY', hint: 'random game, random modifier' },
   { key: '2', label: 'ARCADE', hint: 'pick a game' },
   { key: '3', label: 'DAILY CHALLENGE', hint: 'same seed for everyone today' },
   { key: '4', label: 'STATS & ACHIEVEMENTS', hint: 'your progress' },
+  { key: '5', label: 'THEMES', hint: 'Christmas, Halloween, Frutiger Aero...' },
   { key: 'Q', label: 'QUIT', hint: 'back to work' },
 ];
 
 const PAUSE_ITEMS = ['Resume', 'Restart round', 'End round'];
 const COUNTDOWN_MS = 4000;
 const RESULTS_LOCK_MS = 600;
+const AGENT_POLL_MS = 500;
 
 /* ------------------------------------------------------------------- app */
 
@@ -100,7 +112,10 @@ export class App {
   private readonly games: readonly GameDefinition[];
   private readonly sched: Scheduler;
   private readonly store: SaveStore;
-  private readonly agent: AgentWatcher | null;
+  private readonly agent: AgentMonitor | null;
+  private readonly wallNow: () => number;
+  private agentSnap: AgentSnapshot | null = null;
+  private agentKey = '';
   private save: SaveData;
   private state: State;
   private handle: unknown = null;
@@ -116,6 +131,7 @@ export class App {
   private xpThisRun = 0;
   private dailyShare: string | null = null;
   private readonly frameMs: number;
+  private readonly countdownMs: number;
   private readonly launchedToPlay: boolean;
   private finished = false;
 
@@ -127,9 +143,12 @@ export class App {
     this.store = opts.store;
     this.save = opts.save;
     this.agent = opts.agent ?? null;
+    this.wallNow = opts.wallNow ?? Date.now;
     this.notice = opts.notice;
     this.frameMs = opts.frameMs ?? 33;
+    this.countdownMs = opts.countdownMs ?? COUNTDOWN_MS;
     this.launchedToPlay = opts.start.mode !== 'menu';
+    applyTheme(resolveTheme(opts.themeOverride ?? this.save.settings.theme));
     this.state = { kind: 'menu', sel: 0 };
     if (opts.start.mode === 'play') this.toBriefing(this.newSession(opts.start.session));
     else if (opts.start.mode === 'daily') this.toBriefing(this.newSession({ daily: todayUtc() }));
@@ -160,7 +179,7 @@ export class App {
       this.io.onResize(() => this.render());
       this.io.start();
       this.last = this.sched.now();
-      this.agent?.poll();
+      this.pollAgent();
       this.handle = this.sched.setInterval(() => this.tick(), this.frameMs);
       this.render();
     });
@@ -192,10 +211,11 @@ export class App {
     this.last = now;
     this.animMs += dt;
 
+    // Independent of input: the status line refreshes even while nobody types.
     this.sinceAgentPoll += dt;
-    if (this.agent && this.sinceAgentPoll >= 1000) {
+    if (this.agent && this.sinceAgentPoll >= AGENT_POLL_MS) {
       this.sinceAgentPoll = 0;
-      if (this.agent.poll() && this.agent.current?.state === 'done') this.agentFlash = 4000;
+      this.pollAgent();
     }
     if (this.agentFlash > 0) this.agentFlash -= dt;
 
@@ -229,6 +249,28 @@ export class App {
     if (!this.finished) this.render();
   }
 
+  /** Re-scan agent sessions; flash when the followed session finishes or needs you. */
+  private pollAgent(): void {
+    if (!this.agent) return;
+    try {
+      this.agent.poll(this.wallNow());
+      this.agentSnap = this.agent.snapshot(this.wallNow());
+    } catch {
+      this.agentSnap = null;
+    }
+    const p = this.agentSnap?.primary;
+    const key = p ? `${p.sessionId}:${p.status}` : '';
+    if (key !== this.agentKey && p && p.certainty === 'reported' && (p.status === 'COMPLETED' || p.status === 'WAITING_FOR_INPUT' || p.status === 'ERROR')) {
+      this.agentFlash = 4000;
+    }
+    this.agentKey = key;
+  }
+
+  /** The agent session the HUD is showing (for tests). */
+  get agentView(): StatusView | null {
+    return this.agentSnap?.primary ?? null;
+  }
+
   /** Dispatch a key (public for tests). */
   onKey(key: Key): void {
     const s = this.state;
@@ -239,6 +281,7 @@ export class App {
       case 'playing': return this.playingKey(s, key);
       case 'results': return this.resultsKey(s, key);
       case 'stats': return this.statsKey(s, key);
+      case 'themes': return this.themesKey(s, key);
     }
   }
 
@@ -261,7 +304,7 @@ export class App {
   }
 
   private toBriefing(session: SessionConfig): void {
-    this.state = { kind: 'briefing', session, countdownMs: COUNTDOWN_MS };
+    this.state = { kind: 'briefing', session, countdownMs: this.countdownMs };
   }
 
   private startRound(session: SessionConfig): void {
@@ -271,6 +314,7 @@ export class App {
       difficulty: session.difficulty,
       effects: session.effects,
       durationMs: session.durationMs,
+      ...(this.save.highScores[session.gameId] ? { personalBest: this.save.highScores[session.gameId].score } : {}),
     });
     this.state = { kind: 'playing', session, def, game, playedMs: 0, paused: false, pauseSel: 0 };
     this.screen.invalidate();
@@ -307,6 +351,11 @@ export class App {
     else if (k === '2') this.state = { kind: 'arcade', sel: 0 };
     else if (k === '3') this.toBriefing(this.newSession({ daily: todayUtc() }));
     else if (k === '4') this.state = { kind: 'stats', confirmReset: false };
+    else if (k === '5') {
+      const ids = themeIds();
+      const cur = ids.indexOf(this.save.settings.theme);
+      this.state = { kind: 'themes', sel: cur >= 0 ? cur : ids.indexOf(activeTheme().id), revertTo: activeTheme() };
+    }
     else if (k === 'Q') this.quit();
   }
 
@@ -338,6 +387,8 @@ export class App {
   private playingKey(s: Extract<State, { kind: 'playing' }>, key: Key): void {
     if (s.paused) {
       const ch = key.ch?.toLowerCase();
+      const resume = s.def.appKeys?.pause?.includes(ch ?? '');
+      if (resume) { s.paused = false; return; }
       if (key.name === 'up') s.pauseSel = (s.pauseSel + PAUSE_ITEMS.length - 1) % PAUSE_ITEMS.length;
       else if (key.name === 'down' || key.name === 'tab') s.pauseSel = (s.pauseSel + 1) % PAUSE_ITEMS.length;
       else if (key.name === 'escape') s.paused = false;
@@ -350,6 +401,14 @@ export class App {
       s.paused = true;
       s.pauseSel = 0;
       return;
+    }
+    // Per-game shortcuts for arcade actions (e.g. Tetris: P / R / Q).
+    const ch = key.name === 'char' && !key.ctrl ? key.ch?.toLowerCase() : undefined;
+    const ak = s.def.appKeys;
+    if (ch && ak) {
+      if (ak.pause?.includes(ch)) { s.paused = true; s.pauseSel = 0; return; }
+      if (ak.restart?.includes(ch)) return this.pauseAction(1);
+      if (ak.quit?.includes(ch)) return this.pauseAction(2);
     }
     s.game.handleInput(key);
     if (s.game.isOver()) this.finishRound();
@@ -415,6 +474,28 @@ export class App {
     }
   }
 
+  private themesKey(s: Extract<State, { kind: 'themes' }>, key: Key): void {
+    const ids = themeIds();
+    const ch = key.ch?.toLowerCase();
+    const preview = () => applyTheme(resolveTheme(ids[s.sel]));
+    if (key.name === 'up') { s.sel = (s.sel + ids.length - 1) % ids.length; preview(); }
+    else if (key.name === 'down' || key.name === 'tab') { s.sel = (s.sel + 1) % ids.length; preview(); }
+    else if (ch && /^[1-9]$/.test(ch) && Number(ch) <= ids.length) { s.sel = Number(ch) - 1; preview(); }
+    else if (ch === 'a') {
+      this.save.settings.animations = !this.save.settings.animations;
+      this.store.save(this.save);
+    } else if (key.name === 'enter' || key.name === 'space') {
+      if (!this.enterOk()) return;
+      this.save.settings.theme = ids[s.sel];
+      preview();
+      this.notice = this.store.save(this.save) ? `Theme set: ${themeLabel(ids[s.sel])}` : 'Could not save the theme setting.';
+      this.state = { kind: 'menu', sel: 4 };
+    } else if (key.name === 'escape' || ch === 'q' || key.name === 'backspace') {
+      applyTheme(s.revertTo);
+      this.state = { kind: 'menu', sel: 4 };
+    }
+  }
+
   /* ------------------------------------------------------------ render */
 
   private tooSmallFor(game: GameInstance): boolean {
@@ -440,19 +521,46 @@ export class App {
         case 'playing': lines = this.renderPlaying(this.state); break;
         case 'results': lines = this.renderResults(this.state); break;
         case 'stats': lines = this.renderStats(this.state); break;
+        case 'themes': lines = this.renderThemes(this.state); break;
+      }
+      // Ambient particles fill empty space on menu-like screens, never on a game board.
+      const specs = activeTheme().particles;
+      if (specs && this.save.settings.animations && this.state.kind !== 'playing') {
+        lines = overlayParticles(lines, particleCells(specs, columns, rows, this.animMs), columns, rows);
       }
     }
     this.screen.draw(lines);
   }
 
-  private agentBadge(): string {
-    const st = this.agent?.current;
-    if (!st) return '';
+  /** One-line agent status, fitted to `width`. Empty when there is nothing to show. */
+  agentLine(width: number, withAge = true): string {
+    const v = this.agentSnap?.primary;
+    if (!v) return '';
+    const inferred = v.certainty === 'inferred';
+    const label = STATUS_LABEL[v.status] + (inferred ? '?' : '');
     const spin = ['|', '/', '-', '\\'][Math.floor(this.animMs / 150) % 4];
-    if (st.state === 'working') return theme.muted(`[AI working ${spin}]`);
-    if (st.state === 'attention') return theme.gold(c.bold('[AI needs you]'));
-    const blink = this.agentFlash > 0 && Math.floor(this.animMs / 300) % 2 === 0;
-    return blink ? c.inverse(theme.good(' AI DONE - check it ')) : theme.good('[AI done]');
+    let badge: string;
+    if (inferred) badge = theme.muted(`AI ${label}`);
+    else if (v.status === 'WORKING' || v.status === 'THINKING') badge = theme.primary(c.bold(`AI ${label}`)) + ' ' + theme.muted(spin);
+    else if (v.status === 'WAITING_FOR_INPUT' || v.status === 'ERROR') {
+      const paint = v.status === 'ERROR' ? theme.bad : theme.gold;
+      const blink = this.agentFlash > 0 && Math.floor(this.animMs / 300) % 2 === 0;
+      badge = blink ? c.inverse(paint(c.bold(` AI ${label} `))) : paint(c.bold(`AI ${label}`));
+    } else if (v.status === 'COMPLETED') {
+      const blink = this.agentFlash > 0 && Math.floor(this.animMs / 300) % 2 === 0;
+      badge = blink ? c.inverse(theme.good(' AI DONE - check it ')) : theme.good(c.bold('AI DONE'));
+    } else badge = theme.muted(`AI ${label}`);
+
+    const more = this.agentSnap!.others.filter((o) => o.status !== 'IDLE').length;
+    const where = [v.project, v.sessionId.slice(0, 6)].filter(Boolean).join(' ');
+    const age = withAge ? `${fmtAgo(this.wallNow() - v.activityAt)} ago` : '';
+    const right = theme.muted([where, age].filter(Boolean).join(' · ') + (more ? ` · +${more} more` : ''));
+    // Detail gets whatever room is left; it is the first thing to go.
+    const room = width - visibleWidth(badge) - visibleWidth(right) - 5;
+    const detail = room >= 8 ? theme.muted(truncateText(v.detail, room)) : '';
+    const left = badge + (detail ? '  ' + detail : '');
+    if (visibleWidth(left) + visibleWidth(right) + 2 > width) return left;
+    return spread(left, right, width);
   }
 
   private footerLevel(): string {
@@ -466,7 +574,7 @@ export class App {
     const body: string[] = [];
     body.push(...logo(columns, this.animMs / 180));
     body.push('');
-    body.push(theme.muted("YOUR AI IS THINKING. YOU'RE PLAYING.") + theme.primary(cursor));
+    body.push(theme.muted(activeTheme().tagline) + theme.primary(cursor));
     body.push('');
     MENU_ITEMS.forEach((it, i) => {
       const sel = i === s.sel;
@@ -474,11 +582,12 @@ export class App {
       body.push(sel ? theme.primary('> ') + c.inverse(c.bold(` ${label} `)) + ' ' + theme.muted(it.hint) : '   ' + label + ' ');
     });
     body.push('');
-    const badge = this.agentBadge();
-    body.push(this.footerLevel() + theme.muted(`   ${fmt(this.save.rounds)} rounds`) + (badge ? '   ' + badge : ''));
+    body.push(this.footerLevel() + theme.muted(`   ${fmt(this.save.rounds)} rounds`));
+    const ai = this.agentLine(Math.min(columns - 4, 76));
+    if (ai) body.push(ai);
     if (this.notice) body.push(theme.gold(this.notice));
     body.push('');
-    body.push(keyHint([['Up/Down', 'select'], ['Enter', 'go'], ['1-4', 'shortcut'], ['Q', 'quit']]));
+    body.push(keyHint([['Up/Down', 'select'], ['Enter', 'go'], ['1-5', 'shortcut'], ['Q', 'quit']]));
     return centerVertically(centerBlock(body, columns), rows);
   }
 
@@ -552,20 +661,20 @@ export class App {
     const tl = g.timeLeftMs();
     const timeTone = tl <= 5000 ? (s2: string) => c.bold(theme.bad(s2)) : tl <= 10000 ? theme.gold : c.bold;
     const hud = theme.muted('SCORE ') + c.bold(theme.primary(fmt(g.score))) + theme.muted('  |  TIME ') + timeTone(fmtTime(tl)) + theme.muted('  |  ') + hudLine(g.hud());
-    const badge = this.agentBadge();
-
     let fb = g.feedback();
     if (!fb && tl <= 5000 && !s.paused) fb = { text: `Round ends in ${Math.ceil(tl / 1000)}...`, tone: 'bad' };
     const feedback = fb ? tone(fb.tone)(c.bold(fb.text)) : '';
 
     const body: string[] = [];
     body.push(header);
-    body.push(spread(hud, badge, width));
-    body.push(rule(width));
+    body.push(hud);
+    body.push(rule(width, this.animMs));
     const area = centerBlock(gameLines, width);
     body.push(...area);
-    body.push(rule(width));
+    body.push(rule(width, this.animMs));
     body.push(spread(feedback, keyHint([['Esc', 'pause'], ['Ctrl+C', 'exit']]), width));
+    // Own row, so status updates never shift or overwrite the board.
+    if (this.agent) body.push(this.agentLine(width) || theme.muted('AI status: no agent activity seen (vibebreak doctor)'));
     return centerVertically(centerBlock(body, columns), rows);
   }
 
@@ -624,10 +733,36 @@ export class App {
       body.push('');
       body.push(theme.muted('Share text is printed when you quit.'));
     }
-    const badge = this.agentBadge();
-    if (badge) body.push('', badge);
+    const ai = this.agentLine(Math.min(columns - 4, 76));
+    if (ai) body.push('', ai);
     body.push('');
     body.push(keyHint([['Enter', s.session.daily ? 'retry daily' : 'replay'], ['N', 'play another'], ['M', 'menu'], ['Q', 'quit to shell']]));
+    return centerVertically(centerBlock(body, columns), rows);
+  }
+
+  private renderThemes(s: Extract<State, { kind: 'themes' }>): string[] {
+    const { columns, rows } = this.io;
+    const ids = themeIds();
+    const body: string[] = [];
+    // The logo previews the highlighted theme (it is applied live).
+    if (rows >= 30) body.push(...logo(columns, this.animMs / 180), '');
+    body.push(theme.title('THEMES') + theme.muted('  preview live, Enter to keep'));
+    body.push('');
+    ids.forEach((id, i) => {
+      const sel = i === s.sel;
+      const t = id === SEASONAL ? null : THEMES.find((x) => x.id === id)!;
+      const name = `[${i + 1}] ${t ? t.name : 'Seasonal'}`;
+      const saved = id === this.save.settings.theme ? theme.gold(' *') : '  ';
+      const sw = swatch(t ?? resolveTheme(SEASONAL));
+      const label = padRight(sel ? c.inverse(c.bold(` ${name} `)) : ` ${name} `, 20);
+      body.push((sel ? theme.primary('> ') : '  ') + label + sw + saved);
+      const desc = t ? t.description : `Christmas in December, Halloween from Oct 15, Classic otherwise (now: ${themeLabel(seasonalTheme())}).`;
+      if (sel) body.push('     ' + theme.muted(desc));
+    });
+    body.push('');
+    body.push(theme.muted('Ambient animation ') + (this.save.settings.animations ? theme.good('on') : theme.muted('off')) +
+      theme.muted('   * = saved   colours: ') + theme.muted(getColorDepthLabel()));
+    body.push(keyHint([['Up/Down', 'preview'], ['Enter', 'keep'], ['A', 'animation on/off'], ['Esc', 'cancel']]));
     return centerVertically(centerBlock(body, columns), rows);
   }
 
@@ -642,6 +777,27 @@ export class App {
   }
 }
 
+const STATUS_LABEL: Record<AiStatus, string> = {
+  IDLE: 'IDLE',
+  THINKING: 'THINKING',
+  WORKING: 'WORKING',
+  WAITING_FOR_INPUT: 'NEEDS YOU',
+  COMPLETED: 'DONE',
+  ERROR: 'ERROR',
+  UNKNOWN: 'UNKNOWN',
+};
+
+export function fmtAgo(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h`;
+}
+
+function truncateText(s: string, w: number): string {
+  return s.length <= w ? s : s.slice(0, Math.max(0, w - 1)) + '~';
+}
+
 /** Plain-text share card for the daily challenge (no spoilers, no colour). */
 export function shareText(session: SessionConfig, def: GameDefinition, result: GameResult, summary: RoundSummary): string {
   const mod = getModifier(session.modifierId);
@@ -652,4 +808,18 @@ export function shareText(session: SessionConfig, def: GameDefinition, result: G
     `Score ${fmt(result.score)}${result.perfect ? ' · PERFECT' : ''}  [${'#'.repeat(blocks)}${'-'.repeat(10 - blocks)}]`,
     'Play it: vibebreak daily',
   ].join('\n');
+}
+
+function themeLabel(id: string): string {
+  return id === SEASONAL ? 'Seasonal' : THEMES.find((t) => t.id === id)?.name ?? id;
+}
+
+/** A row of colour chips showing a theme's palette. */
+function swatch(t: ThemeDef): string {
+  const roles = ['primary', 'accent', 'good', 'gold', 'bad', 'muted'] as const;
+  return roles.map((r) => paint(t.palette[r])('##')).join('');
+}
+
+function getColorDepthLabel(): string {
+  return getColorDepth() === 256 ? '256' : '16 (basic)';
 }

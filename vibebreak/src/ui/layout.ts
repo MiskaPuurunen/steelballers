@@ -1,6 +1,7 @@
 import { c, center, padRight, theme, visibleWidth } from './style.js';
 import type { HudItem } from '../core/types.js';
-import { tone as toneFn } from './style.js';
+import { tone as toneFn, paint } from './style.js';
+import { activeTheme, themedRule } from './themes.js';
 
 /** Shared layout helpers and the VibeBreak logo. */
 
@@ -17,7 +18,7 @@ const LETTERS: Record<string, string[]> = {
 
 export const LOGO_WIDTH = 68;
 
-/** Big logo when it fits, otherwise a compact one-liner. `phase` animates a shimmer. */
+/** Big logo in the active theme's gradient when it fits, otherwise a compact one-liner. `phase` animates a shimmer. */
 export function logo(width: number, phase = 0): string[] {
   if (width < LOGO_WIDTH + 2) {
     return [c.bold(theme.primary('>> V I B E ') + theme.accent('B R E A K <<'))];
@@ -28,8 +29,9 @@ export function logo(width: number, phase = 0): string[] {
     const brk = ['B', 'R', 'E', 'A', 'K'].map((l) => LETTERS[l][r]).join('');
     // A slow scanline sweeps down the logo.
     const lit = Math.floor(phase) % 10 === r;
-    const paintA = lit ? (s: string) => c.bold(c.white(s)) : theme.primary;
-    const paintB = lit ? (s: string) => c.bold(c.white(s)) : theme.accent;
+    const { vibe: va, brk: ba, shine } = activeTheme().logo;
+    const paintA = paint(lit ? shine : va[r % va.length]);
+    const paintB = paint(lit ? shine : ba[r % ba.length]);
     rows.push(paintA(vibe) + paintB(brk));
   }
   return rows;
@@ -68,8 +70,9 @@ export function hudLine(items: HudItem[]): string {
     .join(theme.muted('  |  '));
 }
 
-export function rule(width: number): string {
-  return theme.muted('-'.repeat(width));
+/** Separator line in the active theme's style (`phase` in ms animates light strings). */
+export function rule(width: number, phase = 0): string {
+  return themedRule(width, phase);
 }
 
 /** Center a block of lines as a unit (keeps internal alignment). */

@@ -66,6 +66,8 @@ export const ACHIEVEMENTS: readonly Achievement[] = [
   { id: 'touch-typist', name: 'Touch Typist', description: '60+ WPM at 95%+ accuracy in Code Sprint.', check: (c) => roundStat(c, 'codesprint', 'wpm') >= 60 && roundStat(c, 'codesprint', 'accuracy') >= 95 },
   { id: 'skyscraper', name: 'Skyscraper', description: 'Stack a tower 25 blocks high.', check: (c) => roundStat(c, 'stack', 'height') >= 25 },
   { id: 'published', name: 'npm publish', description: 'Escape the Dependency Dungeon.', check: (c) => roundStat(c, 'dungeon', 'escaped') >= 1 },
+  { id: 'why-cross', name: 'Why Did It Cross the Road?', description: 'Hop 50 lanes in Crossy Prod.', check: (c) => roundStat(c, 'crossy', 'distance') >= 50 },
+  { id: 'four-on-the-floor', name: 'Four on the Floor', description: 'Clear four lines at once in Tetris.', check: (c) => roundStat(c, 'tetris', 'tetrises') >= 1 },
   { id: 'daily-driver', name: 'Daily Driver', description: 'Complete a daily challenge.', check: (c) => !!c.session?.daily },
   { id: 'chaos-agent', name: 'Chaos Agent', description: 'Finish a Chaos Mode round.', check: (c) => c.session?.modifierId === 'chaos' && c.result?.endReason !== 'quit' },
   // Rewarding leaving is deliberate: VibeBreak should be easy to put down.

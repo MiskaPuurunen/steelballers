@@ -8,7 +8,7 @@
 | 0:45–1:30 | **Problem** | Waits run from tens of seconds to minutes: too short for deep work, long enough to lose focus. The phone wins by default. (We haven't measured this at scale yet; validating it is experiment #1 in our plan.) |
 | 1:30–2:00 | **Solution** | VibeBreak: an ASCII arcade that lives in your terminal. Rounds of 20–60 seconds, a score, then one key back to work. *Your AI is thinking. You're playing.* |
 | 2:00–4:30 | **Live demo** | See the demo script below. |
-| 4:30–5:15 | **How it's built** | TypeScript, zero runtime dependencies, a custom line-diffing renderer for flicker-free 30 fps, games as pure logic behind one interface, seeded RNG so every session is reproducible, and procedural content validated by flood fill/BFS. 111 automated tests plus a real-PTY smoke test. |
+| 4:30–5:15 | **How it's built** | TypeScript, zero runtime dependencies, a custom line-diffing renderer for flicker-free 30 fps, games as pure logic behind one interface, seeded RNG so every session is reproducible, and procedural content validated by flood fill/BFS. 131 automated tests plus a real-PTY smoke test. |
 | 5:15–6:15 | **Business** | Free core arcade for distribution through npm and AI-coding communities. Monetise with a one-time Plus pack (games, themes), a small Cloud subscription (sync, daily leaderboards) and a Team edition. Every revenue figure is a labelled hypothesis; we show the experiments that would prove or kill it. |
 | 6:15–7:00 | **Close** | We built something that rewards you for *leaving*. That's the point: a break that ends. Ask: try `vibebreak daily` and send us your share card. |
 
@@ -47,7 +47,7 @@ Most won't, and that's fine. The core stays free. We think a minority would pay 
 It uses official hooks (`UserPromptSubmit`, `Stop`, `Notification`, `SessionEnd`) with `async: true`. The hook reads only the event name, writes a tiny status file, prints nothing and always exits 0. Exit code 2 or stdout could block a prompt or inject context, so we avoid both by design. VibeBreak never approves tools, touches permissions, edits project files or reads the agent's I/O. It's documented and removable in one step.
 
 **Why not auto-open the game when the agent starts?**
-Opening terminals works differently on every OS and terminal emulator, and stealing focus mid-thought is a real UX risk. We shipped the reliable one-way beacon first and documented an opt-in auto-launch as a future integration point.
+It can: `vibebreak hook install --launch` opens a game pane next to Claude on every prompt (a Windows Terminal or tmux split, or a new window elsewhere). It's opt-in because it moves keyboard focus. It never opens duplicates, waits 60 seconds between launches, and is fully detached so Claude is never blocked.
 
 **What was technically hard?**
 1. Flicker-free real-time rendering in every terminal, including Windows: a line-diffing renderer plus synchronized output.
@@ -55,7 +55,7 @@ Opening terminals works differently on every OS and terminal emulator, and steal
 3. Never leaving the terminal broken: one idempotent restore path wired to exit, signals and crashes, verified in a real PTY.
 
 **How do you know the games work?**
-111 Vitest tests:
+131 Vitest tests:
 
 - rules tests for each game
 - fuzzing with random input across 25 seeds per game

@@ -54,6 +54,8 @@ export interface GameContext {
   difficulty: Difficulty;
   effects: Effects;
   durationMs: number;
+  /** The player's best score for this game so far (for HUD display). */
+  personalBest?: number;
 }
 
 export type EndReason = 'time' | 'gameover' | 'win' | 'quit';
@@ -112,5 +114,11 @@ export interface GameDefinition {
   xpScale: number;
   /** Modifiers that make no sense for this game (never rolled for it). */
   excludedModifiers?: string[];
+  /**
+   * Extra in-game shortcuts for the arcade's own actions (lower-case chars).
+   * Only for games that don't need these letters for play: Code Sprint
+   * types every letter, so this is opt-in per game. Esc always pauses.
+   */
+  appKeys?: { pause?: string[]; restart?: string[]; quit?: string[] };
   create(ctx: GameContext): GameInstance;
 }

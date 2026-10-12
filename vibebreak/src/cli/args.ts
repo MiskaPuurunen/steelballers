@@ -2,7 +2,7 @@
  * Tiny dependency-free argument parser. Pure, so it is fully unit-tested.
  */
 
-export type Command = 'menu' | 'play' | 'daily' | 'list' | 'stats' | 'reset' | 'hook' | 'help' | 'version';
+export type Command = 'menu' | 'play' | 'daily' | 'list' | 'stats' | 'reset' | 'hook' | 'doctor' | 'theme' | 'help' | 'version';
 
 export interface ParsedArgs {
   command: Command;
@@ -15,15 +15,25 @@ export interface ParsedArgs {
   noColor: boolean;
   yes: boolean;
   json: boolean;
+  /** hook: also open VibeBreak in a new pane when the agent starts working. */
+  launch: boolean;
+  /** play: started by the auto-launcher (shorter countdown). */
+  fromHook: boolean;
+  /** hook install/uninstall: edit ~/.claude/settings.json directly. */
+  write: boolean;
+  /** play: the agent session whose status the HUD should follow. */
+  agentSession?: string;
+  /** Theme for this run (not saved). */
+  theme?: string;
   /** Positional args after the command (e.g. `hook install`). */
   rest: string[];
   error?: string;
 }
 
-const COMMANDS: Command[] = ['play', 'daily', 'list', 'stats', 'reset', 'hook', 'help', 'version'];
+const COMMANDS: Command[] = ['play', 'daily', 'list', 'stats', 'reset', 'hook', 'doctor', 'theme', 'help', 'version'];
 
 export function parseArgs(argv: string[]): ParsedArgs {
-  const out: ParsedArgs = { command: 'menu', random: false, noColor: false, yes: false, json: false, rest: [] };
+  const out: ParsedArgs = { command: 'menu', random: false, noColor: false, yes: false, json: false, launch: false, fromHook: false, write: false, rest: [] };
   const args = [...argv];
   let commandSet = false;
 
@@ -54,6 +64,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
         case '--no-color': case '--no-colour': out.noColor = true; break;
         case '-y': case '--yes': out.yes = true; break;
         case '--json': out.json = true; break;
+        case '--launch': out.launch = true; break;
+        case '--from-hook': out.fromHook = true; break;
+        case '--write': out.write = true; break;
+        case '--agent-session': out.agentSession = takeValue(flag, inline); break;
+        case '-t': case '--theme': out.theme = takeValue(flag, inline); break;
         case '-d': case '--duration': {
           const v = takeValue(flag, inline);
           if (v !== undefined) {
@@ -103,17 +118,24 @@ Usage:
   vibebreak daily                Today's seeded challenge (same for everyone)
   vibebreak list                 List the games
   vibebreak stats                Scores, level and achievements
+  vibebreak theme [id]           List themes, or set one (also: [5] THEMES in the menu)
   vibebreak reset [--yes]        Erase local stats
   vibebreak hook install         Show how to connect Claude Code (optional)
+  vibebreak hook install --launch  ...and auto-open a game pane when Claude starts working
+  vibebreak hook install --launch --write  Do it for you (edits ~/.claude/settings.json, keeps a backup)
+  vibebreak doctor [--json]      Is the Claude Code integration installed, and receiving events?
+  vibebreak hook debug on|off    Log every status event to the agent folder (no prompt text)
 
 Options:
-  -g, --game <id>        bugbash | snake | codesprint | stack | dungeon
+  -g, --game <id>        bugbash | snake | codesprint | stack | dungeon | crossy | tetris
   -d, --duration <sec>   Round time limit. A round may end sooner (e.g. game over);
                          the HUD warns you during the final 10 seconds.
   -s, --seed <seed>      Reproduce a session (game, modifier, layout, sequence)
   -m, --modifier <id>    standard | overclocked | bug-bounty | low-battery |
                          double-xp | glass-cannon | chaos
       --difficulty <d>   easy | normal | hard
+  -t, --theme <id>       classic | christmas | halloween | frutiger-aero | synthwave |
+                         matrix | amber | seasonal (this run only; "vibebreak theme" saves it)
   -r, --random           Random game (the default for play)
       --no-color         Disable colours (NO_COLOR is also respected)
   -h, --help             Show this help

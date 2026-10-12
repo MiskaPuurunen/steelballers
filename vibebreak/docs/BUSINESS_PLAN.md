@@ -8,8 +8,8 @@
 |---|---|
 | 5 minigames, random sessions, 7 modifiers, 3 difficulties | Additional game packs |
 | Seeded daily challenge with a local best and a text share card | Online leaderboards (needs a backend) |
-| Local XP, levels, 13 achievements, stats | Cloud sync of stats across machines |
-| Claude Code status beacon via async hooks | Integrations for other agents; opt-in auto-launch |
+| Local XP, levels, 15 achievements, stats | Cloud sync of stats across machines |
+| Claude Code status beacon + opt-in auto-launch of a game pane via async hooks | Integrations for other agents |
 | Zero telemetry, offline, no account | Optional, opt-in accounts for paid features only |
 | MIT-licensed CLI | Cosmetic themes / ASCII art styles, custom modifiers, team editions |
 

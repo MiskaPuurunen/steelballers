@@ -7,6 +7,9 @@ import { FakeTerminal } from '../src/ui/terminal.js';
 import { SaveStore } from '../src/storage/save.js';
 import { stripAnsi } from '../src/ui/style.js';
 import { FakeScheduler } from './helpers.js';
+import { GAMES } from '../src/games/index.js';
+import { AgentMonitor, recordEvent } from '../src/integrations/agent-status.js';
+import { DEFAULT_TIMEOUTS } from '../src/integrations/agent-model.js';
 
 function setup(start: ConstructorParameters<typeof App>[0]['start'] = { mode: 'menu' }, cols = 100, rows = 34) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-app-'));
@@ -30,7 +33,7 @@ describe('App flow', () => {
     sched.advance(4100); // countdown auto-starts the round
     expect(app.stateKind).toBe('playing');
     expect(text()).toContain('SCORE');
-    sched.advance(61_000);
+    sched.advance(Math.max(...GAMES.map((g) => g.defaultDurationSec)) * 1000 + 1000);
     expect(app.stateKind).toBe('results');
     expect(text()).toMatch(/TIME'S UP|GAME OVER|OBJECTIVE COMPLETE/);
     sched.advance(700); // input lock expires
@@ -165,5 +168,97 @@ describe('App at 80x24', () => {
     sched.advance(100);
     expect(text()).toContain('[Esc] pause');
     expect(text().toLowerCase()).not.toContain('too small');
+  });
+});
+
+describe('AI status in the arcade', () => {
+  function withAgent(start: ConstructorParameters<typeof App>[0]['start']) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-app-agent-'));
+    const store = new SaveStore(path.join(dir, 'save.json'));
+    const io = new FakeTerminal(100, 34);
+    const sched = new FakeScheduler();
+    let wall = 1_700_000_000_000;
+    const agentDir = path.join(dir, 'agent');
+    const app = new App({ io, store, save: store.load().data, start, scheduler: sched, agent: new AgentMonitor(agentDir, { timeouts: DEFAULT_TIMEOUTS }), wallNow: () => wall });
+    void app.run();
+    const text = () => app.frame.map(stripAnsi).join('\n');
+    const event = (name: string, extra: object = {}) => recordEvent({ name, sessionId: 'sess-1', at: wall, agent: 'claude-code', project: 'myapp', ...extra }, agentDir);
+    const advance = (ms: number) => { wall += ms; sched.advance(ms); };
+    return { app, io, text, event, advance };
+  }
+
+  it('16. status updates reach the screen with no key pressed', () => {
+    const { app, io, text, event, advance } = withAgent({ mode: 'play', session: { gameId: 'snake', seed: 'AI-1' } });
+    advance(4100);
+    expect(app.stateKind).toBe('playing');
+    expect(text()).toContain('no agent activity seen');
+    event('UserPromptSubmit');
+    const writesBefore = io.output.length;
+    advance(600);
+    expect(text()).toMatch(/AI THINKING/);
+    expect(text()).toContain('myapp');
+    event('PreToolUse', { toolName: 'Bash', toolUseId: 't1' });
+    advance(600);
+    expect(text()).toMatch(/AI WORKING\s.*running Bash/);
+    event('PermissionRequest', { toolName: 'Edit' });
+    advance(600);
+    expect(text()).toMatch(/NEEDS YOU/);
+    event('Stop');
+    advance(600);
+    expect(text()).toMatch(/AI DONE/);
+    expect(io.output.length).toBeGreaterThan(writesBefore);
+    expect(app.agentView).toMatchObject({ status: 'COMPLETED', certainty: 'reported' });
+  });
+
+  it('a silent turn is shown as inferred, then unknown, never done', () => {
+    const { app, text, event, advance } = withAgent({ mode: 'menu' });
+    event('UserPromptSubmit');
+    advance(600);
+    expect(text()).toMatch(/AI THINKING/);
+    advance(DEFAULT_TIMEOUTS.quietMs);
+    expect(text()).toMatch(/AI THINKING\?/);
+    advance(DEFAULT_TIMEOUTS.lostMs);
+    expect(app.agentView).toMatchObject({ status: 'UNKNOWN', certainty: 'inferred' });
+    expect(text()).not.toMatch(/AI DONE/);
+  });
+
+  it('the status line never displaces the game board', () => {
+    const { app, text, event, advance } = withAgent({ mode: 'play', session: { gameId: 'tetris', seed: 'AI-2' } });
+    advance(4100);
+    const before = app.frame.length;
+    const boardTop = app.frame.findIndex((l) => stripAnsi(l).includes('NEXT'));
+    event('PreToolUse', { toolName: 'A-really-long-tool-name-that-goes-on-and-on-and-on-mcp__server__tool', toolUseId: 'x' });
+    advance(600);
+    expect(app.frame.length).toBe(before);
+    expect(app.frame.findIndex((l) => stripAnsi(l).includes('NEXT'))).toBe(boardTop);
+    for (const l of app.frame) expect(stripAnsi(l).length).toBeLessThanOrEqual(100);
+    expect(text()).toMatch(/AI WORKING/);
+  });
+});
+
+describe('per-game arcade keys (Tetris)', () => {
+  it('P pauses and resumes, R restarts, Q ends the round', () => {
+    const { app, io, sched } = setup({ mode: 'play', session: { gameId: 'tetris', seed: 'TET-1' } });
+    sched.advance(4100);
+    const first = app.currentGame!;
+    io.send('p');
+    expect(app.frame.map(stripAnsi).join('\n')).toContain('PAUSED');
+    const t = first.timeLeftMs();
+    sched.advance(2000);
+    expect(first.timeLeftMs()).toBe(t);
+    io.send('p');
+    sched.advance(100);
+    expect(first.timeLeftMs()).toBeLessThan(t);
+    io.send('r');
+    expect(app.currentGame).not.toBe(first);
+    io.send('q');
+    expect(app.stateKind).toBe('results');
+  });
+
+  it('typing games keep those letters', () => {
+    const { app, io, sched } = setup({ mode: 'play', session: { gameId: 'codesprint', seed: 'CS-1' } });
+    sched.advance(4100);
+    io.send('q');
+    expect(app.stateKind).toBe('playing');
   });
 });
