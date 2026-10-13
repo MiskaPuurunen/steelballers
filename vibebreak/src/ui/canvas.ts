@@ -16,6 +16,8 @@ export interface DrawOptions {
   compact?: boolean;
   /** Override every glyph's colour (flashes, blinking). */
   tint?: string;
+  /** Swap some colour roles for others (e.g. a car's 'body' for its team colour). */
+  remap?: Record<string, string>;
   /** Only cells inside this rectangle are touched (exclusive x1/y1). */
   clip?: Clip;
 }
@@ -71,7 +73,8 @@ export class Canvas {
           this.put(left + col, top + r, ' ', null, opts.clip);
           continue;
         }
-        this.put(left + col, top + r, ch, opts.tint ?? sprite.tints[ch] ?? sprite.tint, opts.clip);
+        const role = sprite.tints[ch] ?? sprite.tint;
+        this.put(left + col, top + r, ch, opts.tint ?? opts.remap?.[role] ?? role, opts.clip);
       }
     }
   }

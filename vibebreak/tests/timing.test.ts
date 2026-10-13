@@ -143,7 +143,10 @@ describe('timing on the command line', () => {
     expect(parseArgs(['play', '--game', 'tetris', '--untimed']).timing).toBe('untimed');
     expect(parseArgs(['play', '--game', 'skiing', '--mode', 'endless'])).toMatchObject({ game: 'skiing', timing: 'untimed' });
     expect(parseArgs(['play', '--mode', 'sprint']).timing).toBe('timed');
-    expect(parseArgs(['--no-timer']).command).toBe('play');
+    // Only choosing a game implies play: a timer flag alone still opens the menu.
+    expect(parseArgs(['--no-timer'])).toMatchObject({ command: 'menu', timing: 'untimed' });
+    expect(parseArgs(['--duration', '30'])).toMatchObject({ command: 'menu', duration: 30 });
+    expect(parseArgs(['--game', 'snake']).command).toBe('play');
     expect(parseArgs(['play', '--timer']).timing).toBe('timed');
     expect(parseArgs(['play']).timing).toBeUndefined();
     expect(parseArgs(['play', '--no-timer', '--timer']).error).toMatch(/Conflicting/);
@@ -177,14 +180,16 @@ describe('timing in the arcade', () => {
     expect(text()).not.toContain("TIME'S UP");
   });
 
-  it('the TIMER menu sets the default for Quick Play, saved across runs', () => {
+  it('the timer setting sets the default for Quick Play, saved across runs', () => {
     const { app, io, store, text } = setup();
-    expect(text()).toContain('[T] TIMER: ON');
-    io.send('t');
-    expect(text()).toContain('SESSION MODE');
-    io.send('2');
+    expect(text()).toContain('timer on');
+    io.send('t'); // shortcut: Settings, on the Timer row
+    expect(text()).toContain('SETTINGS');
+    io.send('\x1b[C'); // change it
     expect(store.load().data.settings.timing).toBe('untimed');
-    expect(text()).toContain('TIMER: OFF (untimed)');
+    expect(text()).toContain('off (untimed)');
+    io.send('\x1b');
+    expect(text()).toContain('timer off');
     io.send('1'); // Quick Play
     expect(app.stateKind).toBe('briefing');
     expect(text()).toMatch(/Timer\s+none/);

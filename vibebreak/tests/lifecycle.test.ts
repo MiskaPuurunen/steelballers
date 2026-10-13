@@ -30,6 +30,8 @@ describe('every game survives fuzzed play across seeds and modifiers', () => {
             expect(lines.length).toBeLessThanOrEqual(game.minSize.height + 4);
           }
         }
+        // Races end at the finish line, never on a clock: random keys rarely get there.
+        if (def.untimedOnly && !game.isOver()) game.forceEnd('quit');
         expect(game.isOver()).toBe(true);
         const r = game.result();
         expect(r.score).toBeGreaterThanOrEqual(0);

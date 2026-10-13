@@ -2,7 +2,9 @@
  * Tiny dependency-free argument parser. Pure, so it is fully unit-tested.
  */
 
-export type Command = 'menu' | 'play' | 'daily' | 'list' | 'stats' | 'reset' | 'hook' | 'doctor' | 'theme' | 'host' | 'join' | 'rooms' | 'help' | 'version';
+import { isInterfaceMode, type InterfaceMode } from '../core/interfaces.js';
+
+export type Command = 'menu' | 'play' | 'daily' | 'list' | 'stats' | 'reset' | 'hook' | 'doctor' | 'theme' | 'host' | 'join' | 'rooms' | 'interfaces' | 'help' | 'version';
 
 export interface ParsedArgs {
   command: Command;
@@ -53,17 +55,21 @@ export interface ParsedArgs {
   autoStart?: number;
   /** Dedicated host / bot: exit after N completed matches. */
   matches?: number;
+  /** Where the interactive arcade runs (--interface / --standalone). Undefined = saved preference. */
+  interface?: InterfaceMode;
+  /** Internal: this process was opened in its own window by the standalone launcher. */
+  window: boolean;
   /** Positional args after the command (e.g. `hook install`). */
   rest: string[];
   error?: string;
 }
 
-const COMMANDS: Command[] = ['play', 'daily', 'list', 'stats', 'reset', 'hook', 'doctor', 'theme', 'host', 'join', 'rooms', 'help', 'version'];
+const COMMANDS: Command[] = ['play', 'daily', 'list', 'stats', 'reset', 'hook', 'doctor', 'theme', 'host', 'join', 'rooms', 'interfaces', 'help', 'version'];
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const out: ParsedArgs = {
     command: 'menu', random: false, noColor: false, yes: false, json: false, launch: false, fromHook: false, write: false,
-    party: false, spectate: false, allowPublic: false, dedicated: false, bot: false, sets: {}, packs: [], rest: [],
+    party: false, spectate: false, allowPublic: false, dedicated: false, bot: false, window: false, sets: {}, packs: [], rest: [],
   };
   const args = [...argv];
   let commandSet = false;
@@ -145,6 +151,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
           if (t) out.timing = t;
           break;
         }
+        case '-i': case '--interface': {
+          const v = takeValue(flag, inline)?.toLowerCase();
+          if (isInterfaceMode(v)) out.interface = v;
+          else if (v !== undefined) out.error ??= `Invalid interface "${v}" (terminal, standalone or auto; see --list-interfaces)`;
+          break;
+        }
+        case '--standalone': out.interface = 'standalone'; break;
+        case '--list-interfaces': out.command = 'interfaces'; commandSet = true; break;
+        case '--window': out.window = true; break;
         case '--dedicated': out.dedicated = true; break;
         case '--bot': out.bot = true; break;
         case '--set': {
@@ -195,8 +210,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
     out.rest.push(raw);
   }
 
-  // A specific game implies play.
-  if (out.command === 'menu' && (out.game || out.random || out.seed || out.duration !== undefined || out.timing)) out.command = 'play';
+  // Choosing a game (or a seed) implies play. Nothing else does: `vibebreak --no-timer`
+  // or `--duration 30` still opens the menu, with that setting for this run's rounds.
+  if (out.command === 'menu' && (out.game || out.random || out.seed)) out.command = 'play';
   if (out.timing === 'untimed' && out.duration !== undefined) out.error ??= '--duration sets a time limit, so it cannot be combined with --no-timer';
   return out;
 }
@@ -204,7 +220,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
 export const HELP = `VibeBreak — your AI is thinking. You're playing.
 
 Usage:
-  vibebreak                      Open the arcade menu
+  vibebreak                      Open the arcade menu (always the menu; nothing starts by itself)
   vibebreak play                 Jump straight into a random minigame
   vibebreak play --game snake    Play a specific game
   vibebreak play --duration 30   Set the round time limit in seconds (15-300)
@@ -214,7 +230,7 @@ Usage:
   vibebreak daily                Today's seeded challenge (same for everyone)
   vibebreak list                 List the games
   vibebreak stats                Scores, level and achievements
-  vibebreak theme [id]           List themes, or set one (also: [5] THEMES in the menu)
+  vibebreak theme [id]           List themes, or set one (also: [8] SETTINGS in the menu)
   vibebreak reset [--yes]        Erase local stats
   vibebreak hook install         Show how to connect Claude Code (optional)
   vibebreak hook install --launch  ...and auto-open a game pane when Claude starts working
@@ -222,19 +238,27 @@ Usage:
   vibebreak doctor [--json]      Is the Claude Code integration installed, and receiving events?
   vibebreak hook debug on|off    Log every status event to the agent folder (no prompt text)
 
+Where it runs (also [8] SETTINGS > Interface in the menu, saved as your default):
+  vibebreak --interface terminal     In this terminal (VS Code's integrated terminal works)
+  vibebreak --interface standalone   In a new terminal window (alias: --standalone)
+  vibebreak --interface auto         This terminal (default); never opens a window by itself
+  vibebreak --list-interfaces        What each option does, and what was detected here
+
 LAN multiplayer (same network, no internet or accounts needed):
   vibebreak host                 Host a lobby (pick the game in the lobby)
-  vibebreak host --game battleship | prompt-panic | doodle-protocol
+  vibebreak host --game battleship | prompt-panic | doodle-protocol | racing
   vibebreak host --party         Party mix: a random game each match
   vibebreak join 192.168.1.42    Join a host (also host:port, or --port 7777)
   vibebreak join                 Browse rooms on your network, or type an address
   vibebreak rooms [--json]       List VibeBreak rooms on your network
-  In the menu: [H] host, [J] join, [P] party mode. [T] sets timed or untimed rounds.
+  In the menu: [4] MULTIPLAYER (shortcuts H host, J join, P party). [T] opens the timer setting.
 
 Options:
-  -g, --game <id>        bugbash | snake | ski | stack | dungeon | crossy | tetris
+  -g, --game <id>        bugbash | snake | ski | stack | dungeon | crossy | tetris |
+                         racing | timetrial | highway
   -d, --duration <sec>   Round time limit. A round may end sooner (e.g. game over);
-                         the HUD warns you during the final 10 seconds.
+                         the HUD warns you during the final 10 seconds. Without
+                         "play" it applies to the rounds you start from the menu.
   -s, --seed <seed>      Reproduce a session (game, modifier, layout, sequence)
   -m, --modifier <id>    standard | overclocked | bug-bounty | low-battery |
                          double-xp | glass-cannon | chaos
@@ -247,6 +271,7 @@ Options:
       --timer            Timed round, even if your saved preference is untimed
       --mode <m>         sprint | endless (also timed | untimed)
       --no-color         Disable colours (NO_COLOR is also respected)
+  -i, --interface <m>    terminal | standalone | auto (overrides the saved setting)
 
 LAN options:
   -p, --port <n>         Port to host on / connect to (default 7777; next free port is used)

@@ -11,6 +11,8 @@ import { THEMES, SEASONAL, applyTheme, isThemeId, resolveTheme, seasonalTheme, t
 import { statsLines } from '../ui/stats-view.js';
 import { AgentMonitor, agentDir, debugLogPath, gcSessions, hookSnippet, setDebug } from '../integrations/agent-status.js';
 import { acquireArcadeLock, cliEntry } from '../integrations/launcher.js';
+import { chooseInterface, openStandalone } from './interface.js';
+import { INTERFACES, describeTerminal, type InterfaceMode } from '../core/interfaces.js';
 import { hookMain } from './hook.js';
 import { buildReport, reportLines } from './doctor.js';
 import { mergeVibeBreak, stripVibeBreak, updateClaudeSettings } from '../integrations/claude-settings.js';
@@ -69,6 +71,8 @@ export async function main(argv: string[]): Promise<number> {
       return 0;
     case 'list':
       return list();
+    case 'interfaces':
+      return listInterfaces(loaded.data.settings.interface);
     case 'stats':
       if (args.json) out(JSON.stringify(loaded.data, null, 2));
       else {
@@ -105,7 +109,7 @@ export async function main(argv: string[]): Promise<number> {
           console: true,
         });
       }
-      return play(args, store, loaded, lan);
+      return play(args, store, loaded, lan, argv);
     }
     case 'join': {
       let target: { host: string; port: number } | undefined;
@@ -130,10 +134,10 @@ export async function main(argv: string[]): Promise<number> {
         ...(args.name ? { name: cleanName(args.name) } : {}),
         spectate: args.spectate,
       };
-      return play(args, store, loaded, lan);
+      return play(args, store, loaded, lan, argv);
     }
     default:
-      return play(args, store, loaded);
+      return play(args, store, loaded, undefined, argv);
   }
 }
 
@@ -141,7 +145,7 @@ function list(): number {
   out(theme.title('VIBEBREAK GAMES'));
   out();
   for (const g of GAMES) {
-    out(padRight(theme.primary(c.bold(g.id)), 14) + padRight(g.name, 22) + theme.muted(`${g.genre}, ${g.defaultDurationSec}s${g.untimed ? ' or untimed' : ''}`) + (g.modeNames ? theme.muted(` (${g.modeNames.timed} / ${g.modeNames.untimed})`) : ''));
+    out(padRight(theme.primary(c.bold(g.id)), 14) + padRight(g.name, 22) + theme.muted(`${g.genre}, ${g.untimedOnly ? 'ends at the finish line' : `${g.defaultDurationSec}s${g.untimed ? ' or untimed' : ''}`}`) + (g.modeNames ? theme.muted(` (${g.modeNames.timed} / ${g.modeNames.untimed})`) : ''));
     out(' '.repeat(14) + theme.muted(g.tagline));
   }
   out();
@@ -384,52 +388,80 @@ async function rooms(args: ParsedArgs): Promise<number> {
   return 0;
 }
 
-async function play(args: ParsedArgs, store: SaveStore, loaded: ReturnType<SaveStore['load']>, lan?: LanStart): Promise<number> {
-  if (!lan && args.game && !findGame(args.game)) {
-    const retired = RETIRED_GAMES[args.game.toLowerCase()];
-    err(`vibebreak: ${retired ?? `unknown game "${args.game}".`} Available: ${GAMES.map((g) => g.id).join(', ')}`);
+async function play(args: ParsedArgs, store: SaveStore, loaded: ReturnType<SaveStore['load']>, lan?: LanStart, argv: string[] = []): Promise<number> {
+  const invalid = invalidPlayArgs(args, lan);
+  if (invalid) {
+    err(`vibebreak: ${invalid}`);
     return 2;
   }
-  if (!lan && args.timing === 'untimed') {
-    if (args.command === 'daily') {
-      err('vibebreak: the daily challenge is always timed so everyone plays the same round. Drop --no-timer.');
-      return 2;
+  const interactive = !!process.stdin.isTTY && !!process.stdout.isTTY;
+  const choice = chooseInterface(args.interface, loaded.data.settings.interface, { env: process.env, platform: process.platform, interactive });
+  if (choice.run === 'window') {
+    const opened = await openStandalone(argv);
+    if (opened.ok) {
+      out(`VibeBreak opened in a ${opened.target}. This terminal is free.`);
+      return 0;
     }
-    const def = args.game ? findGame(args.game) : undefined;
-    if (def && !def.untimed) {
-      err(`vibebreak: ${def.name} has no untimed mode. Untimed games: ${GAMES.filter((g) => g.untimed).map((g) => g.id).join(', ')}`);
-      return 2;
+    if (opened.why === 'already-running') {
+      out(`vibebreak: ${opened.message} Switch to it, or run "vibebreak --interface terminal" for another one here.`);
+      return 0;
     }
+    err(`vibebreak: ${opened.message}`);
+    if (!interactive) return 1;
+    err('Starting in this terminal instead.');
   }
-  if (!lan && args.modifier && !MODIFIERS.some((m) => m.id === args.modifier)) {
-    err(`vibebreak: unknown modifier "${args.modifier}". Available: ${MODIFIERS.map((m) => m.id).join(', ')}`);
-    return 2;
-  }
-
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+  if (!interactive) {
     err('vibebreak: the arcade needs an interactive terminal (TTY).');
     if (lan?.mode === 'host') err('For a headless server use: vibebreak host --dedicated');
     else if (lan?.mode === 'join') err('For an automated player use: vibebreak join <address> --bot');
-    else err('Try "vibebreak list" or "vibebreak stats" for non-interactive output.');
+    else err('Try "vibebreak list" or "vibebreak stats" for non-interactive output, or "vibebreak --standalone" to open a window.');
     return 1;
   }
-  let start: StartMode;
-  if (lan) start = { mode: 'lan', lan };
-  else if (args.command === 'daily') start = { mode: 'daily' };
-  else if (args.command === 'play') {
-    start = {
-      mode: 'play',
-      session: {
-        ...(args.game ? { gameId: findGame(args.game)!.id } : {}),
-        ...(args.seed ? { seed: args.seed } : {}),
-        ...(args.duration !== undefined ? { durationSec: args.duration } : {}),
-        ...(args.difficulty ? { difficulty: args.difficulty } : {}),
-        ...(args.modifier ? { modifierId: args.modifier } : {}),
-        ...(args.timing ? { untimed: args.timing === 'untimed' } : {}),
-      },
-    };
-  } else start = { mode: 'menu' };
+  return runArcade(args, store, loaded, startModeFor(args, lan));
+}
 
+/** Argument problems worth reporting before anything opens. */
+function invalidPlayArgs(args: ParsedArgs, lan?: LanStart): string | null {
+  if (lan) return null;
+  if (args.game && !findGame(args.game)) {
+    const retired = RETIRED_GAMES[args.game.toLowerCase()];
+    return `${retired ?? `unknown game "${args.game}".`} Available: ${GAMES.map((g) => g.id).join(', ')}`;
+  }
+  if (args.timing === 'untimed') {
+    if (args.command === 'daily') return 'the daily challenge is always timed so everyone plays the same round. Drop --no-timer.';
+    const def = args.game ? findGame(args.game) : undefined;
+    if (def && !def.untimed) return `${def.name} has no untimed mode. Untimed games: ${GAMES.filter((g) => g.untimed).map((g) => g.id).join(', ')}`;
+  }
+  if (args.modifier && !MODIFIERS.some((m) => m.id === args.modifier)) {
+    return `unknown modifier "${args.modifier}". Available: ${MODIFIERS.map((m) => m.id).join(', ')}`;
+  }
+  return null;
+}
+
+/** The menu, unless the command asked for something specific (a game, the daily, a LAN room). */
+function startModeFor(args: ParsedArgs, lan?: LanStart): StartMode {
+  if (lan) return { mode: 'lan', lan };
+  if (args.command === 'daily') return { mode: 'daily' };
+  if (args.command !== 'play') return { mode: 'menu' };
+  return {
+    mode: 'play',
+    session: {
+      ...(args.game ? { gameId: findGame(args.game)!.id } : {}),
+      ...(args.seed ? { seed: args.seed } : {}),
+      ...(args.duration !== undefined ? { durationSec: args.duration } : {}),
+      ...(args.difficulty ? { difficulty: args.difficulty } : {}),
+      ...(args.modifier ? { modifierId: args.modifier } : {}),
+      ...(args.timing ? { untimed: args.timing === 'untimed' } : {}),
+    },
+  };
+}
+
+/**
+ * Run the interactive arcade in this terminal until the player quits. All
+ * terminal setup and restore goes through NodeTerminal (start/stop, which is
+ * idempotent), whether the run ends normally, by signal, by EOF or by crash.
+ */
+async function runArcade(args: ParsedArgs, store: SaveStore, loaded: ReturnType<SaveStore['load']>, start: StartMode): Promise<number> {
   gcSessions();
   const io = new NodeTerminal();
   const releaseLock = acquireArcadeLock();
@@ -438,31 +470,74 @@ async function play(args: ParsedArgs, store: SaveStore, loaded: ReturnType<SaveS
     store,
     save: loaded.data,
     start,
+    ...(args.duration !== undefined ? { durationSec: args.duration } : {}),
+    ...(args.timing ? { untimed: args.timing === 'untimed' } : {}),
+    version: version(),
     ...(args.fromHook ? { countdownMs: 2000 } : {}),
     ...(args.theme ? { themeOverride: args.theme } : {}),
     agent: new AgentMonitor(agentDir(), args.agentSession ? { preferredSession: args.agentSession } : {}),
     ...(loaded.recoveredFrom ? { notice: `Save file was unreadable; started fresh (backup kept).` } : {}),
   });
 
-  const onSignal = () => app.quit();
-  process.on('SIGTERM', onSignal);
-  process.on('SIGHUP', onSignal);
-  process.on('SIGINT', onSignal);
+  const quit = () => app.quit();
   const crash = (e: unknown) => {
     io.stop();
     releaseLock();
     err(`vibebreak crashed: ${e instanceof Error ? e.stack ?? e.message : String(e)}`);
-    process.exit(1);
+    err('Progress up to your last finished round is saved. Please report this with the message above.');
+    void closeWindowAfterError(args).then(() => process.exit(1));
   };
+  const signals = ['SIGTERM', 'SIGHUP', 'SIGINT'] as const;
+  for (const sig of signals) process.on(sig, quit);
+  // The terminal went away (or input was closed): leave cleanly instead of spinning.
+  process.stdin.once('end', quit);
   process.on('uncaughtException', crash);
+  process.on('unhandledRejection', crash);
 
   const info = await app.run();
   releaseLock();
-  process.off('SIGTERM', onSignal);
-  process.off('SIGHUP', onSignal);
-  process.off('SIGINT', onSignal);
+  for (const sig of signals) process.off(sig, quit);
+  process.stdin.off('end', quit);
   process.off('uncaughtException', crash);
+  process.off('unhandledRejection', crash);
   for (const m of info.messages) out(m);
+  return 0;
+}
+
+/**
+ * A standalone window closes the moment the process exits, taking any error
+ * with it. In one, wait for Enter (up to a minute) so the message can be read.
+ */
+function closeWindowAfterError(args: ParsedArgs): Promise<void> {
+  if (!args.window || !process.stdin.isTTY) return Promise.resolve();
+  err('Press Enter to close this window.');
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(done, 60_000);
+    try {
+      process.stdin.setRawMode(false);
+    } catch {
+      /* not a TTY any more */
+    }
+    process.stdin.resume();
+    process.stdin.once('data', done);
+  });
+}
+
+function listInterfaces(saved: InterfaceMode): number {
+  const interactive = !!process.stdin.isTTY && !!process.stdout.isTTY;
+  out(theme.title('Where VibeBreak runs'));
+  out('');
+  for (const i of INTERFACES) out(padRight(theme.primary(c.bold(i.id)), 14) + i.summary + (i.id === saved ? theme.gold('  (saved)') : ''));
+  out('');
+  out(theme.muted(`Detected: ${describeTerminal(process.env)}${interactive ? '' : ' (not interactive)'}.`));
+  const pick = chooseInterface(undefined, saved, { env: process.env, platform: process.platform, interactive });
+  const where = pick.run === 'window' ? 'open a new window' : interactive ? 'run in this terminal' : 'stop and explain (no interactive terminal; --standalone opens a window)';
+  out(theme.muted(`"vibebreak" here would ${where}.`));
+  out(theme.muted('Change it with --interface <id> for one run, or in the menu: [8] SETTINGS > Interface.'));
   return 0;
 }
 

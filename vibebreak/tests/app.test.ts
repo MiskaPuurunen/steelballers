@@ -120,7 +120,7 @@ describe('App flow', () => {
     expect(text()).toContain('ARCADE');
     expect(text()).toContain('Dependency Dungeon');
     io.send('\x1b');
-    io.send('4');
+    io.send('6');
     expect(text()).toContain('ACHIEVEMENTS');
     io.send('\x1b');
     io.send('3');
@@ -135,7 +135,7 @@ describe('App flow', () => {
     sched.advance(16_000);
     sched.advance(700);
     io.send('m');
-    io.send('4');
+    io.send('6');
     io.send('x');
     expect(store.load().data.rounds).toBe(1);
     io.send('x');
@@ -221,7 +221,8 @@ describe('AI status in the arcade', () => {
     advance(DEFAULT_TIMEOUTS.lostMs);
     expect(app.agentView).toMatchObject({ status: 'UNKNOWN', certainty: 'inferred' });
     expect(text()).not.toMatch(/AI DONE/);
-  });
+    // Minutes of simulated time at 30fps: wall-clock headroom for a busy (parallel) test run.
+  }, 15_000);
 
   it('the status line never displaces the game board', () => {
     const { app, text, event, advance } = withAgent({ mode: 'play', session: { gameId: 'tetris', seed: 'AI-2' } });

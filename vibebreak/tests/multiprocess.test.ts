@@ -71,6 +71,29 @@ describe('multi-process LAN matches', () => {
     expect(host.out()).toMatch(/Bob joined/);
   }, 90_000);
 
+  it('a dedicated host and two bot processes complete a LAN race; the host decides the result', async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-mp-'));
+    const port = await freePort();
+    const host = cli(['host', '--dedicated', '--local', '--port', String(port), '--game', 'racing', '--set', 'laps=1', '--autostart', '2', '--matches', '1'], home);
+    await waitForText(host.out, /Room \w{4} is open/);
+    const a = cli(['join', `127.0.0.1:${port}`, '--bot', '--name', 'Ada', '--matches', '1'], home);
+    const b = cli(['join', `127.0.0.1:${port}`, '--bot', '--name', 'Bob', '--matches', '1'], home);
+    const codes = await Promise.all([host.exit, a.exit, b.exit]);
+    expect(codes).toEqual([0, 0, 0]);
+    const [hostResult] = results(host.out());
+    expect(hostResult).toMatchObject({ gameId: 'racing', incomplete: false });
+    expect(hostResult.headline).toMatch(/^(Ada|Bob) wins in \d:\d\d\.\d\d$/);
+    expect(hostResult.standings).toHaveLength(2);
+    const [ra] = results(a.out());
+    const [rb] = results(b.out());
+    // Both clients finished and agree with the server on the winner and the order.
+    expect(ra.headline).toBe(hostResult.headline);
+    expect(rb.headline).toBe(hostResult.headline);
+    expect([ra.rank, rb.rank].sort()).toEqual([1, 2]);
+    expect([ra, rb].find((r) => r.rank === 1).player).toBe(hostResult.standings[0].name);
+    expect(ra.score + rb.score).toBe(18); // both crossed the line: 10 + 8 points
+  }, 120_000);
+
   it('three bot processes play Prompt Panic; the console can inspect the room', async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-mp-'));
     const port = await freePort();
@@ -116,7 +139,7 @@ describe('multi-process LAN matches', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-mp-'));
     const bad = cli(['host', '--game', 'chess', '--dedicated'], home);
     expect(await bad.exit).toBe(2);
-    expect(bad.out()).toMatch(/unknown LAN game "chess". Available: battleship, prompt-panic, doodle-protocol, random/);
+    expect(bad.out()).toMatch(/unknown LAN game "chess". Available: battleship, prompt-panic, doodle-protocol, racing, random/);
     const opt = cli(['host', '--game', 'battleship', '--set', 'turnTime=7', '--dedicated'], home);
     expect(await opt.exit).toBe(2);
     expect(opt.out()).toMatch(/invalid option turnTime=7 .* turnTime=0\|20\|30\|60/);

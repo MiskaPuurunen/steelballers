@@ -277,12 +277,6 @@ end
 /* ------------------------------------------------------------- loading */
 
 let runtimePromise: Promise<LuaRuntime> | null = null;
-let loaded: LuaRuntime | null = null;
-
-/** The runtime if it has finished loading, else null. */
-export function getLuaRuntime(): LuaRuntime | null {
-  return loaded;
-}
 
 /** Load the Lua WASM runtime once. Rejects with a friendly message if missing. */
 export function loadLuaRuntime(): Promise<LuaRuntime> {
@@ -334,7 +328,6 @@ export function loadLuaRuntime(): Promise<LuaRuntime> {
         };
       },
     };
-    loaded = runtime;
     return runtime;
   })();
   return runtimePromise;

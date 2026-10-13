@@ -56,10 +56,6 @@ export function containsSlur(text: string): boolean {
   return text.split(/\s+/).some((w) => matches(w, SLURS));
 }
 
-export function containsProfanity(text: string): boolean {
-  return text.split(/\s+/).some((w) => matches(w, PROFANITY));
-}
-
 /** Mask offending words with asterisks. Slurs always; profanity when `family` is on. */
 export function maskText(text: string, family: boolean): { text: string; masked: boolean } {
   let masked = false;

@@ -2,13 +2,14 @@ import type { MpGameDefinition } from './types.js';
 import { battleshipDef } from '../games/multiplayer/battleship.js';
 import { promptPanicDef } from '../games/multiplayer/prompt-panic.js';
 import { doodleDef } from '../games/multiplayer/doodle.js';
+import { raceMpDef } from '../games/racing/mp.js';
 
 /**
  * Multiplayer game registry (server side). To add a LAN game, implement
  * MpGameDefinition, add it here, and add its client UI to
  * src/ui/lan/game-uis.ts. Lobby, networking and reconnection are shared.
  */
-export const MP_GAMES: readonly MpGameDefinition[] = [battleshipDef, promptPanicDef, doodleDef];
+export const MP_GAMES: readonly MpGameDefinition[] = [battleshipDef, promptPanicDef, doodleDef, raceMpDef];
 
 export const RANDOM_GAME = 'random';
 
@@ -16,6 +17,7 @@ const ALIASES: Record<string, string> = {
   ships: 'battleship', battleships: 'battleship', bs: 'battleship', naval: 'battleship',
   prompt: 'prompt-panic', prompts: 'prompt-panic', promptpanic: 'prompt-panic', panic: 'prompt-panic', pp: 'prompt-panic',
   doodle: 'doodle-protocol', draw: 'doodle-protocol', drawing: 'doodle-protocol', doodleprotocol: 'doodle-protocol', dp: 'doodle-protocol',
+  race: 'racing', races: 'racing', cars: 'racing', 'grand-prix': 'racing', gp: 'racing',
   party: RANDOM_GAME, any: RANDOM_GAME,
 };
 

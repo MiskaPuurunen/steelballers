@@ -60,7 +60,9 @@ describe('autoLaunch', () => {
     expect(autoLaunch({ dir, env, platform: 'linux', now: 1_030_000, run })).toBe('too-soon');
     expect(autoLaunch({ dir, env, platform: 'linux', now: 1_061_000, run })).toBe('launched');
     expect(runs).toHaveLength(2);
-    expect(runs[0].args.at(-1)).toContain("'play' '--from-hook'");
+    // It opens the menu (never straight into a game) and can't relaunch itself.
+    expect(runs[0].args.at(-1)).toContain("'--interface' 'terminal' '--from-hook'");
+    expect(runs[0].args.at(-1)).not.toContain("'play'");
   });
 
   it('passes the duration through', () => {

@@ -12,7 +12,9 @@
 ```
 src/
   cli/          index.ts (bin entry), main.ts (commands), args.ts (pure arg parser)
+                interface.ts   where the arcade runs: this terminal or a new window (see below)
   core/         types.ts       shared interfaces (GameInstance, GameDefinition, Key, Effects…)
+                interfaces.ts  the interface choices (terminal | standalone | auto), dependency-free
                 rng.ts         seedable mulberry32 RNG with pick/weighted/shuffle/fork
                 session.ts     session generator: game, difficulty, modifier, duration, daily seed
                 modifiers.ts   modifier + difficulty tables -> concrete Effects
@@ -20,7 +22,15 @@ src/
                 progression.ts XP curve, achievements, recordRound()
   games/        bugbash.ts snake.ts ski.ts stack.ts dungeon.ts crossy.ts tetris.ts, index.ts (registry)
                 ski-sprites.ts  Ski Survival art: tree variants, obstacles, skier poses, effects (data only)
+  games/racing/ track.ts       seeded tracks: smooth periodic curves, hazards, scenery (circuit + endless highway)
+                sim.ts         the race simulation shared by every mode and the LAN server (fixed 20ms steps)
+                ai.ts          AI drivers (press the same keys a person can) + a snapshot-only driver for bots
+                sprites.ts     cars, traffic, hazards (built on ui/sprite.ts; scenery reuses ski-sprites)
+                render.ts      RaceView: one renderer for singleplayer and LAN scenes
+                game.ts        arcade modes: Grand Prix, Time Trial (records + ghost), Highway
+                mp.ts          LAN racing: server-authoritative match over the shared sim
   ui/           terminal.ts    TerminalIO: NodeTerminal (real) and FakeTerminal (tests)
+                menu-screens.ts main menu, Multiplayer, Settings, Agent status, Help (pure render + settings)
                 screen.ts      line-diffing renderer with synchronized updates
                 sprite.ts      multi-line ASCII sprites: frames, anchor, colour roles, hitboxes, compact art
                 canvas.ts      layered character grid: clipped sprite blits, run-grouped ANSI output
@@ -87,7 +97,7 @@ The `GameContext` passed to `create()` contains a forked `Rng`, the difficulty, 
 
 ## The shell (`ui/app.ts`)
 
-A single state machine: `menu → arcade → briefing → playing (paused?) → results`, plus `stats`.
+A single state machine: `menu → arcade → briefing → playing (paused?) → results`, plus `stats`, `multiplayer`, `settings`, `agent`, `help`, `themes`, the custom-game screens and `lan`. Every run starts at `menu` unless the command line asked for something specific (`play`, `daily`, `host`, `join`); nothing starts a game on its own.
 
 - **One loop.** One `setInterval` at about 30 fps calls `tick()`. `tick()` computes `dt`, advances the briefing countdown or the game, re-scans agent session files every 500 ms (the status line is redrawn every frame, so ages tick and staleness shows with no input), animates the results count-up and renders. `quit()` clears the interval, and a test asserts no timer remains.
 - **One input handler.** stdin data is parsed into `Key`s and dispatched by state. Ctrl+C is handled before any game sees the key.
@@ -95,11 +105,35 @@ A single state machine: `menu → arcade → briefing → playing (paused?) → 
 - **Too-small terminals.** If the window is smaller than the game's `minSize` plus the HUD, the game is paused (its clock does not advance) and a resize hint is shown. Every game fits 80×24.
 - **Injected dependencies.** `TerminalIO`, a `Scheduler` (clock + interval) and the `SaveStore` are all injected. The app tests drive the whole flow with a fake terminal and a fake clock, including the countdown, timed rounds, pause, restart, reroll, resize, stats reset and Ctrl+C.
 
+## Interfaces: one app, two places to draw it
+
+```
+vibebreak [--interface terminal|standalone|auto]
+   |
+cli/main.ts ── chooseInterface(cli flag > saved setting > auto)
+   |                 |
+   | inline          | window: cli/interface.ts openStandalone()
+   |                 |   planLaunch(..., 'window') -> wt / start / Terminal.app / x-terminal-emulator
+   |                 |   the window runs the same CLI with --interface terminal --window
+   v                 v
+runArcade(): NodeTerminal + App (menu, games, LAN, agent status, save file)
+```
+
+There is no second front end. An interface only decides which terminal the one `App` draws in, so both share every game, the save file and settings, the LAN stack and the agent status by construction.
+
+- **Recursion guard.** The window's command line carries `--interface terminal`, and the window process takes the arcade lock, so a standalone launch can neither open another window nor a second arcade. An environment marker is set too, but it isn't relied on: Windows Terminal starts new windows from its own process.
+- **`auto` never spawns.** Without a TTY it explains how to open a window. Only an explicit choice (`--standalone` or the saved setting) ever opens one.
+- **Cleanup.** All terminal state (raw mode, alternate screen, cursor, bracketed paste) is set and restored by `NodeTerminal.start/stop`, which is idempotent and also runs on process exit. `runArcade` routes normal quit, SIGINT/SIGTERM/SIGHUP, stdin EOF, uncaught exceptions and unhandled rejections through it. A standalone window pauses on an error so the message isn't lost when it closes.
+- **The agent hook's auto-launch** uses the same `planLaunch` (as a split pane) and opens the menu with `--interface terminal`; it never starts a game.
+
 ## Timed and untimed rounds
 
 A round's gameplay deadline is `SessionConfig.durationMs: number | null`; `null` means untimed. It flows unchanged into `GameContext.durationMs`, and `BaseGame` only ends a round with `'time'` when there is a deadline. `GameInstance.timeLeftMs()` returns `null` for untimed rounds, and the HUD shows "NO TIMER" instead of a countdown. The frame loop, `update(dt)` and animations run the same either way. Only the deadline is optional.
 
 - Games declare `untimed: true` when they can be played without a deadline, and optionally `modeNames` (Ski Survival: *Survival Sprint* / *Endless Mountain*). Games that ramp difficulty by elapsed time use `rampProgress(untimedRampMs)`: timed rounds ramp over their duration, untimed ones over a fixed span. Bug Bash replaces the clock with lives when untimed.
+- Games that always end on their own (a race ends at the finish line) declare `untimedOnly`: every session for them is untimed, and they never come up as the daily challenge. `retrySameSeed` makes the results screen's replay keep the seed (Time Trial retries the same track).
+- Best *times* (lower is better) are kept apart from scores: a game returns `records` in its result, `recordRound` stores each only if it beats the saved one (`save.timeRecords`, with optional ghost samples, size-capped), and games read them back from `GameContext.records`.
+- Real-time LAN games set `tickMs` on their `MpGameDefinition`. The server ticks at that rate while their match runs (racing: 33 ms) and goes back to its 200 ms default afterwards. Matches stay plain synchronous state: the racing match advances its simulation to the server clock on every tick and every input.
 - `generateSession({ untimed })` never consumes randomness for timing, so a seed reproduces the same round in both modes. Requests that can't be honoured (the daily, custom games) fall back to timed with a `timingNote` shown in the briefing.
 - The preference lives in `settings.timing`. Untimed results go to `save.untimedScores` and history entries are tagged `untimed`, so timed records stay comparable.
 - Network timeouts (heartbeats, idle and hello timeouts, reconnect grace) live in `src/net` and know nothing about gameplay timing. `host --no-timer` only changes game options.

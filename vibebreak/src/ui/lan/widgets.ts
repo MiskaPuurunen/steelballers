@@ -100,5 +100,4 @@ export function scoreboard(rows: Array<{ id: string; name: string; score: number
   });
 }
 
-export const isEnter = (k: Key): boolean => k.name === 'enter';
 export const lower = (k: Key): string | undefined => (k.name === 'char' && !k.ctrl ? k.ch?.toLowerCase() : undefined);

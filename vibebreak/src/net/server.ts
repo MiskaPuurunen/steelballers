@@ -107,8 +107,7 @@ export class LanServer {
       onCloseRequest: () => void this.close('The host closed the lobby.'),
       ...(this.opts.log ? { log: this.opts.log } : {}),
     });
-    const tickMs = this.opts.tickMs ?? 200;
-    this.timer = setInterval(() => this.tick(), tickMs);
+    this.schedule(this.opts.tickMs ?? 200);
     if (this.opts.discovery) {
       this.discovery = new DiscoveryResponder(() => ({ ...this.lobby.info(), port: this.port, address: this.address }), {
         port: this.opts.discoveryPort,
@@ -246,6 +245,18 @@ export class LanServer {
       }
     }
     this.lobby.tick();
+    // Real-time games (racing) ask for a faster tick while their match runs.
+    const base = this.opts.tickMs ?? 200;
+    const want = Math.max(16, Math.min(base, this.lobby.desiredTickMs ?? base));
+    if (want !== this.tickMs && this.timer) this.schedule(want);
+  }
+
+  private tickMs = 0;
+
+  private schedule(ms: number): void {
+    if (this.timer) clearInterval(this.timer);
+    this.tickMs = ms;
+    this.timer = setInterval(() => this.tick(), ms);
   }
 
   /** Close the lobby and the server. Idempotent; resolves when everything is shut. */

@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { TimeRecord } from '../core/types.js';
+import { isInterfaceMode, type InterfaceMode } from '../core/interfaces.js';
 
 /**
  * Local, account-free persistence. One small JSON file in the user's config
@@ -9,6 +11,8 @@ import path from 'node:path';
  */
 
 export const SAVE_VERSION = 1;
+/** Ghost replays are capped so the save file stays small. */
+export const MAX_GHOST = 2400;
 
 export interface GameStats {
   plays: number;
@@ -45,6 +49,8 @@ export interface Settings {
   lanName?: string;
   /** Default for Quick Play, the arcade and replays: timed rounds or no gameplay deadline. */
   timing: 'timed' | 'untimed';
+  /** Where `vibebreak` opens: this terminal, a new window, or auto. `--interface` overrides it. */
+  interface: InterfaceMode;
 }
 
 /** LAN multiplayer record (local only: results as reported by the host you played on). */
@@ -72,6 +78,8 @@ export interface SaveData {
   untimedScores: Record<string, { score: number; at: string; seed: string }>;
   settings: Settings;
   lan: LanStats;
+  /** Best times (lower is better), e.g. Time Trial per seed. */
+  timeRecords: Record<string, TimeRecord>;
 }
 
 export function defaultSave(now = new Date()): SaveData {
@@ -89,8 +97,9 @@ export function defaultSave(now = new Date()): SaveData {
     daily: {},
     customScores: {},
     untimedScores: {},
-    settings: { color: 'auto', theme: 'classic', animations: true, timing: 'timed' },
+    settings: { color: 'auto', theme: 'classic', animations: true, timing: 'timed', interface: 'auto' },
     lan: { matches: 0, wins: 0, games: {} },
+    timeRecords: {},
   };
 }
 
@@ -179,11 +188,21 @@ export function normalizeSave(raw: unknown): SaveData {
   if (isObj(raw.settings) && typeof raw.settings.animations === 'boolean') s.settings.animations = raw.settings.animations;
   if (isObj(raw.settings) && typeof raw.settings.lanName === 'string' && raw.settings.lanName.length <= 64) s.settings.lanName = raw.settings.lanName;
   if (isObj(raw.settings) && (raw.settings.timing === 'timed' || raw.settings.timing === 'untimed')) s.settings.timing = raw.settings.timing;
+  // Unknown values (a typo, a newer version) keep the default rather than failing.
+  if (isObj(raw.settings) && isInterfaceMode(raw.settings.interface)) s.settings.interface = raw.settings.interface;
   if (isObj(raw.untimedScores)) {
     for (const [k, v] of Object.entries(raw.untimedScores).slice(0, 100)) {
       if (isObj(v) && typeof v.score === 'number' && Number.isFinite(v.score)) {
         s.untimedScores[k] = { score: v.score, at: String(v.at ?? ''), seed: String(v.seed ?? '') };
       }
+    }
+  }
+  if (isObj(raw.timeRecords)) {
+    for (const [k, v] of Object.entries(raw.timeRecords).slice(0, 200)) {
+      if (k.length > 120 || !isObj(v) || typeof v.ms !== 'number' || !Number.isFinite(v.ms) || v.ms <= 0) continue;
+      const splits = Array.isArray(v.splits) ? v.splits.filter((n): n is number => typeof n === 'number' && Number.isFinite(n)).slice(0, 20) : [];
+      const ghost = Array.isArray(v.ghost) ? v.ghost.filter((n): n is number => typeof n === 'number' && Number.isFinite(n)).slice(0, MAX_GHOST) : undefined;
+      s.timeRecords[k] = { ms: v.ms, at: String(v.at ?? ''), seed: String(v.seed ?? ''), splits, ...(ghost?.length ? { ghost } : {}) };
     }
   }
   if (isObj(raw.lan)) {

@@ -25,7 +25,12 @@ import { THEMES, SEASONAL, activeTheme, applyTheme, overlayParticles, particleCe
 import { paint } from './style.js';
 import { LanScreen, type LanDeps, type LanStart } from './lan/lan-screen.js';
 import { resolveBind } from '../net/address.js';
-import { cleanName } from '../net/sanitize.js';
+import { cleanName, wrapText } from '../net/sanitize.js';
+import { readHealth, type Health } from '../integrations/agent-status.js';
+import { inspectInstall, type InstallReport } from '../integrations/claude-settings.js';
+import {
+  MENU_ITEMS, MULTIPLAYER_ITEMS, agentLines, helpLines, menuList, multiplayerLines, settingRows, settingsLines, stepSetting,
+} from './menu-screens.js';
 import os from 'node:os';
 
 /* ------------------------------------------------------------------ deps */
@@ -72,6 +77,14 @@ export interface AppOptions {
   themeOverride?: string;
   /** Overrides for LAN networking (tests inject fakes). */
   lanDeps?: Partial<LanDeps>;
+  /** Round length for sessions started from the menu (`--duration`, the agent hook). */
+  durationSec?: number;
+  /** Timer for this run only (`--no-timer` / `--timer`), beating the saved setting. */
+  untimed?: boolean;
+  /** Shown on the Help screen. */
+  version?: string;
+  /** Claude Code install and hook health for the Agent screen (read when it opens; tests inject). */
+  agentInfo?: () => { install: InstallReport | null; health: Health | null };
 }
 
 export interface ExitInfo {
@@ -112,23 +125,12 @@ type State =
   | { kind: 'custom-file'; input: LineInput; error: string | null; failedSource: string | null }
   | { kind: 'custom-editor'; error: string | null; confirmClear: boolean }
   | { kind: 'lan'; screen: LanScreen }
-  | { kind: 'timing'; sel: number };
+  | { kind: 'multiplayer'; sel: number }
+  | { kind: 'settings'; sel: number; notice: string | null }
+  | { kind: 'agent'; install: InstallReport | null; health: Health | null }
+  | { kind: 'help' };
 
 type CustomStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
-
-const MENU_ITEMS: Array<{ key: string; label: string; hint: string }> = [
-  { key: '1', label: 'QUICK PLAY', hint: 'random game, random modifier' },
-  { key: '2', label: 'ARCADE', hint: 'pick a game' },
-  { key: '3', label: 'DAILY CHALLENGE', hint: 'same seed for everyone today' },
-  { key: '4', label: 'STATS & ACHIEVEMENTS', hint: 'your progress' },
-  { key: '5', label: 'THEMES', hint: 'Christmas, Halloween, Frutiger Aero...' },
-  { key: '6', label: 'CUSTOM GAMES', hint: 'play your own Lua games' },
-  { key: 'T', label: 'TIMER', hint: 'timed rounds or no countdown' },
-  { key: 'H', label: 'HOST LAN GAME', hint: 'Battleship, Prompt Panic, Doodle Protocol' },
-  { key: 'J', label: 'JOIN LAN GAME', hint: 'find a room on your network' },
-  { key: 'P', label: 'PARTY MODE', hint: 'host a random party game mix' },
-  { key: 'Q', label: 'QUIT', hint: 'back to work' },
-];
 
 const PAUSE_ITEMS = ['Resume', 'Restart round', 'End round'];
 const COUNTDOWN_MS = 4000;
@@ -181,6 +183,9 @@ export class App {
   private readonly draft = new TextEditor();
   private readonly lanDeps: Partial<LanDeps>;
   private timingOverride: boolean | undefined;
+  private readonly defaultDurationSec: number | undefined;
+  private readonly version: string;
+  private readonly agentInfo: () => { install: InstallReport | null; health: Health | null };
 
   constructor(opts: AppOptions) {
     this.io = opts.io;
@@ -198,8 +203,11 @@ export class App {
     this.countdownMs = opts.countdownMs ?? COUNTDOWN_MS;
     this.launchedToPlay = opts.start.mode !== 'menu';
     this.lanDeps = opts.lanDeps ?? {};
-    // `vibebreak play --no-timer` / `--timer` beat the saved preference for this run.
-    if (opts.start.mode === 'play' && opts.start.session.untimed !== undefined) this.timingOverride = opts.start.session.untimed;
+    // `--no-timer` / `--timer` beat the saved preference for this run, menu rounds included.
+    this.timingOverride = opts.start.mode === 'play' ? opts.start.session.untimed ?? opts.untimed : opts.untimed;
+    this.defaultDurationSec = opts.durationSec;
+    this.version = opts.version ?? '';
+    this.agentInfo = opts.agentInfo ?? (() => ({ install: safely(() => inspectInstall()), health: safely(() => readHealth()) }));
     applyTheme(resolveTheme(opts.themeOverride ?? this.save.settings.theme));
     this.state = { kind: 'menu', sel: 0 };
     if (opts.start.mode === 'play') this.toBriefing(this.newSession(opts.start.session));
@@ -319,7 +327,7 @@ export class App {
       }
     } else if (s.kind === 'lan') {
       s.screen.tick(dt);
-      if (s.screen.done) this.state = { kind: 'menu', sel: 0 };
+      if (s.screen.done) this.toMenu('4');
     } else if (s.kind === 'results') {
       s.lockMs -= dt;
       const target = s.result.score;
@@ -386,10 +394,13 @@ export class App {
       case 'custom': return this.customKey(s, key);
       case 'custom-file': return this.customFileKey(s, key);
       case 'custom-editor': return this.customEditorKey(s, key);
-      case 'timing': return this.timingKey(s, key);
+      case 'multiplayer': return this.multiplayerKey(s, key);
+      case 'settings': return this.settingsKey(s, key);
+      case 'agent': return this.agentScreenKey(key);
+      case 'help': return this.backOnEscape(key, '9');
       case 'lan':
         s.screen.onKey(key);
-        if (s.screen.done) this.state = { kind: 'menu', sel: 0 };
+        if (s.screen.done) this.toMenu('4');
         return;
     }
   }
@@ -409,7 +420,8 @@ export class App {
     return opts.untimed ?? this.timingOverride ?? this.save.settings.timing === 'untimed';
   }
 
-  private newSession(opts: SessionOptions): SessionConfig {
+  private newSession(given: SessionOptions): SessionConfig {
+    const opts = this.defaultDurationSec !== undefined && given.durationSec === undefined ? { ...given, durationSec: this.defaultDurationSec } : given;
     const untimed = this.wantsUntimed(opts);
     if (opts.gameId?.startsWith(CUSTOM_PREFIX)) return generateSession(this.customGames, { ...opts, untimed, previousGameId: null });
     return generateSession(this.games, { previousGameId: this.save.lastGameId, ...opts, untimed });
@@ -445,6 +457,7 @@ export class App {
         effects: session.effects,
         durationMs: session.durationMs,
         ...(best ? { personalBest: best.score } : {}),
+        records: this.save.timeRecords,
       });
     } catch (err) {
       if (!def.custom) throw err;
@@ -485,34 +498,92 @@ export class App {
     } else if (key.ch) this.menuSelect(key.ch.toUpperCase());
   }
 
+  /** Back to the main menu with `key`'s item highlighted. */
+  private toMenu(key = '1'): void {
+    this.state = { kind: 'menu', sel: Math.max(0, MENU_ITEMS.findIndex((m) => m.key === key)) };
+  }
+
   private menuSelect(k: string): void {
     this.notice = undefined;
-    if (k === '1') this.toBriefing(this.newSession({}));
-    else if (k === '2') this.state = { kind: 'arcade', sel: 0 };
-    else if (k === '3') this.toBriefing(this.newSession({ daily: todayUtc() }));
-    else if (k === '4') this.state = { kind: 'stats', confirmReset: false };
-    else if (k === '5') {
-      const ids = themeIds();
-      const cur = ids.indexOf(this.save.settings.theme);
-      this.state = { kind: 'themes', sel: cur >= 0 ? cur : ids.indexOf(activeTheme().id), revertTo: activeTheme() };
+    switch (k) {
+      case '1': return this.toBriefing(this.newSession({}));
+      case '2': this.state = { kind: 'arcade', sel: 0 }; return;
+      case '3': return this.toBriefing(this.newSession({ daily: todayUtc() }));
+      case '4': this.state = { kind: 'multiplayer', sel: 0 }; return;
+      case '5': return this.toCustomList();
+      case '6': this.state = { kind: 'stats', confirmReset: false }; return;
+      case '7': return this.openAgentScreen();
+      case '8': this.state = { kind: 'settings', sel: 0, notice: null }; return;
+      case '9': this.state = { kind: 'help' }; return;
+      // Shortcuts kept from earlier versions.
+      case 'T': this.state = { kind: 'settings', sel: 1, notice: null }; return;
+      case 'H': case 'J': case 'P': return this.openLan(k);
+      case 'Q': return this.quit();
     }
-    else if (k === '6') this.toCustomList();
-    else if (k === 'T') this.state = { kind: 'timing', sel: this.save.settings.timing === 'untimed' ? 1 : 0 };
-    else if (k === 'H') this.state = { kind: 'lan', screen: this.newLan({ mode: 'host' }) };
-    else if (k === 'J') this.state = { kind: 'lan', screen: this.newLan({ mode: 'join' }) };
-    else if (k === 'P') this.state = { kind: 'lan', screen: this.newLan({ mode: 'host', party: true }) };
-    else if (k === 'Q') this.quit();
+  }
+
+  private openLan(k: 'H' | 'J' | 'P'): void {
+    const start: LanStart = k === 'J' ? { mode: 'join' } : k === 'P' ? { mode: 'host', party: true } : { mode: 'host' };
+    this.state = { kind: 'lan', screen: this.newLan(start) };
+  }
+
+  private multiplayerKey(s: Extract<State, { kind: 'multiplayer' }>, key: Key): void {
+    const n = MULTIPLAYER_ITEMS.length;
+    const ch = key.ch?.toUpperCase();
+    if (key.name === 'up') s.sel = (s.sel + n - 1) % n;
+    else if (key.name === 'down' || key.name === 'tab') s.sel = (s.sel + 1) % n;
+    else if (key.name === 'enter' || key.name === 'space') {
+      if (this.enterOk()) this.openLan(MULTIPLAYER_ITEMS[s.sel].key as 'H' | 'J' | 'P');
+    } else if (ch === 'H' || ch === 'J' || ch === 'P') this.openLan(ch);
+    else if (key.name === 'escape' || ch === 'Q' || key.name === 'backspace') this.toMenu('4');
+  }
+
+  private settingsKey(s: Extract<State, { kind: 'settings' }>, key: Key): void {
+    const rows = settingRows(this.save.settings, themeLabel(this.save.settings.theme));
+    const row = rows[s.sel];
+    const ch = key.ch?.toLowerCase();
+    if (key.name === 'up') s.sel = (s.sel + rows.length - 1) % rows.length;
+    else if (key.name === 'down' || key.name === 'tab') s.sel = (s.sel + 1) % rows.length;
+    else if (key.name === 'escape' || ch === 'q' || key.name === 'backspace') this.toMenu('8');
+    else if (key.name === 'left' || key.name === 'right' || key.name === 'enter' || key.name === 'space') {
+      if ((key.name === 'enter' || key.name === 'space') && !this.enterOk()) return;
+      if (row.id === 'theme') return this.openThemes();
+      stepSetting(this.save.settings, row.id, key.name === 'left' ? -1 : 1);
+      // The menu's choice is the timer from now on; a --timer flag only covered the start.
+      if (row.id === 'timing') this.timingOverride = undefined;
+      s.notice = this.store.save(this.save) ? null : 'Could not save settings (is the config folder writable?).';
+    }
+  }
+
+  private openThemes(): void {
+    const ids = themeIds();
+    const cur = ids.indexOf(this.save.settings.theme);
+    this.state = { kind: 'themes', sel: cur >= 0 ? cur : ids.indexOf(activeTheme().id), revertTo: activeTheme() };
+  }
+
+  private openAgentScreen(): void {
+    this.pollAgent();
+    this.state = { kind: 'agent', ...this.agentInfo() };
+  }
+
+  private agentScreenKey(key: Key): void {
+    if (key.ch?.toLowerCase() === 'r') this.openAgentScreen();
+    else this.backOnEscape(key, '7');
+  }
+
+  private backOnEscape(key: Key, menuKey: string): void {
+    if (key.name === 'escape' || key.ch?.toLowerCase() === 'q' || key.name === 'backspace' || key.name === 'enter') this.toMenu(menuKey);
   }
 
   private arcadeKey(s: Extract<State, { kind: 'arcade' }>, key: Key): void {
     const n = this.games.length;
     if (key.name === 'up') s.sel = (s.sel + n - 1) % n;
     else if (key.name === 'down' || key.name === 'tab') s.sel = (s.sel + 1) % n;
-    else if (key.name === 'escape' || key.ch?.toLowerCase() === 'q' || key.name === 'backspace') this.state = { kind: 'menu', sel: 1 };
+    else if (key.name === 'escape' || key.ch?.toLowerCase() === 'q' || key.name === 'backspace') this.toMenu('2');
     else if (key.name === 'enter' || key.name === 'space') {
       if (this.enterOk()) this.toBriefing(this.newSession({ gameId: this.games[s.sel].id }));
-    } else if (key.ch && /^[1-9]$/.test(key.ch)) {
-      const i = Number(key.ch) - 1;
+    } else if (key.ch && /^[0-9]$/.test(key.ch)) {
+      const i = key.ch === '0' ? 9 : Number(key.ch) - 1;
       if (i < n) this.toBriefing(this.newSession({ gameId: this.games[i].id }));
     }
   }
@@ -521,7 +592,7 @@ export class App {
     const ch = key.ch?.toLowerCase();
     if (key.name === 'enter' || key.name === 'space') {
       if (this.enterOk()) this.startRound(s.session);
-    } else if (ch === 't' && !s.session.daily && this.def(s.session.gameId).untimed) {
+    } else if (ch === 't' && !s.session.daily && this.def(s.session.gameId).untimed && !this.def(s.session.gameId).untimedOnly) {
       // Same round, other timing (for this round only; [T] in the menu sets the default).
       this.timingOverride = s.session.durationMs !== null;
       this.toBriefing(this.flipTiming(s.session));
@@ -589,7 +660,10 @@ export class App {
       // Replay the same game. The daily replays its fixed seed.
       const next = s.session.daily
         ? this.newSession({ daily: s.session.daily })
-        : this.newSession({ gameId: s.session.gameId, untimed: s.session.durationMs === null });
+        : this.newSession({
+          gameId: s.session.gameId, untimed: s.session.durationMs === null,
+          ...(s.def.retrySameSeed ? { seed: s.session.seed, difficulty: s.session.difficulty, modifierId: s.session.modifierId } : {}),
+        });
       this.toBriefing(next);
     } else if (ch === 'n') {
       this.toBriefing(this.newSession({}));
@@ -624,24 +698,8 @@ export class App {
     }
     s.confirmReset = false;
     if (key.name === 'escape' || key.name === 'enter' || ch === 'q' || key.name === 'backspace') {
-      this.state = { kind: 'menu', sel: 3 };
+      this.toMenu('6');
     }
-  }
-
-  private timingKey(s: Extract<State, { kind: 'timing' }>, key: Key): void {
-    const ch = key.ch?.toLowerCase();
-    const choose = (i: number) => {
-      this.save.settings.timing = i === 1 ? 'untimed' : 'timed';
-      this.timingOverride = undefined;
-      this.notice = this.store.save(this.save)
-        ? (i === 1 ? 'Timer off: rounds end on game over, or when you press Esc.' : 'Timer on: rounds have a time limit.')
-        : 'Could not save the timer setting.';
-      this.state = { kind: 'menu', sel: MENU_ITEMS.findIndex((m) => m.key === 'T') };
-    };
-    if (key.name === 'up' || key.name === 'down' || key.name === 'tab') s.sel = 1 - s.sel;
-    else if (ch === '1' || ch === '2') choose(Number(ch) - 1);
-    else if (key.name === 'enter' || key.name === 'space') { if (this.enterOk()) choose(s.sel); }
-    else if (key.name === 'escape' || ch === 'q' || key.name === 'backspace') this.state = { kind: 'menu', sel: MENU_ITEMS.findIndex((m) => m.key === 'T') };
   }
 
   private themesKey(s: Extract<State, { kind: 'themes' }>, key: Key): void {
@@ -658,11 +716,11 @@ export class App {
       if (!this.enterOk()) return;
       this.save.settings.theme = ids[s.sel];
       preview();
-      this.notice = this.store.save(this.save) ? `Theme set: ${themeLabel(ids[s.sel])}` : 'Could not save the theme setting.';
-      this.state = { kind: 'menu', sel: 4 };
+      const saved = this.store.save(this.save);
+      this.state = { kind: 'settings', sel: 2, notice: saved ? `Theme set: ${themeLabel(ids[s.sel])}` : 'Could not save the theme setting.' };
     } else if (key.name === 'escape' || ch === 'q' || key.name === 'backspace') {
       applyTheme(s.revertTo);
-      this.state = { kind: 'menu', sel: 4 };
+      this.state = { kind: 'settings', sel: 2, notice: null };
     }
   }
 
@@ -745,7 +803,7 @@ export class App {
     else if ((key.name === 'down' || key.name === 'tab') && n) s.sel = (s.sel + 1) % n;
     else if (key.name === 'escape' || key.name === 'backspace' || ch === 'q') {
       this.customMessage = null;
-      this.state = { kind: 'menu', sel: 5 };
+      this.toMenu('5');
     } else if (key.name === 'enter' || key.name === 'space') {
       if (n && this.enterOk()) this.playCustom(s.sel);
     } else if (ch && /^[1-9]$/.test(ch)) {
@@ -896,7 +954,13 @@ export class App {
         case 'custom-file': lines = this.renderCustomFile(this.state); break;
         case 'custom-editor': lines = this.renderEditor(this.state); break;
         case 'lan': lines = this.state.screen.render(columns, rows); break;
-        case 'timing': lines = this.renderTiming(this.state); break;
+        case 'multiplayer': lines = this.screenLines(multiplayerLines(this.state.sel)); break;
+        case 'settings': lines = this.screenLines(settingsLines(settingRows(this.save.settings, themeLabel(this.save.settings.theme)), this.state.sel, this.io.columns - 4, this.state.notice)); break;
+        case 'agent': lines = this.screenLines(agentLines({
+          snap: this.agentSnap, monitoring: !!this.agent, statusLine: this.agentLine(Math.min(this.io.columns - 4, 76)),
+          install: this.state.install, health: this.state.health, now: this.wallNow(),
+        }, this.io.columns - 4)); break;
+        case 'help': lines = this.screenLines(helpLines({ version: this.version, saveFile: this.store.file, env: process.env }, this.io.columns - 4)); break;
       }
       // Ambient particles fill empty space on menu-like screens, never on a game board.
       const specs = activeTheme().particles;
@@ -952,33 +1016,37 @@ export class App {
     body.push('');
     body.push(theme.muted(activeTheme().tagline) + theme.primary(cursor));
     body.push('');
-    MENU_ITEMS.forEach((it, i) => {
-      const sel = i === s.sel;
-      const name = it.key === 'T' ? `TIMER: ${this.save.settings.timing === 'untimed' ? 'OFF (untimed)' : 'ON'}` : it.label;
-      const label = `[${it.key}] ${name}`;
-      body.push(sel ? theme.primary('> ') + c.inverse(c.bold(` ${label} `)) + ' ' + theme.muted(it.hint) : '   ' + label + ' ');
-    });
+    body.push(...menuList(MENU_ITEMS, s.sel));
     body.push('');
-    body.push(this.footerLevel() + theme.muted(`   ${fmt(this.save.rounds)} rounds`));
+    const timer = (this.timingOverride ?? this.save.settings.timing === 'untimed') ? 'timer off' : 'timer on';
+    body.push(this.footerLevel() + theme.muted(`   ${fmt(this.save.rounds)} rounds   ${timer}`));
     const ai = this.agentLine(Math.min(columns - 4, 76));
     if (ai) body.push(ai);
     if (this.notice) body.push(theme.gold(this.notice));
     body.push('');
-    body.push(keyHint([['Up/Down', 'select'], ['Enter', 'go'], ['1-6 T H J P', 'shortcut'], ['Q', 'quit']]));
+    body.push(keyHint([['Up/Down', 'select'], ['Enter', 'go'], ['1-9', 'shortcut'], ['Q', 'quit']]));
     return centerVertically(centerBlock(body, columns), rows);
+  }
+
+  /** A simple screen, centred. */
+  private screenLines(body: string[]): string[] {
+    return centerVertically(centerBlock(body, this.io.columns), this.io.rows);
   }
 
   private renderArcade(s: Extract<State, { kind: 'arcade' }>): string[] {
     const { columns, rows } = this.io;
     const body: string[] = [theme.title('ARCADE'), theme.muted('Pick a game. Modifier and difficulty are still rolled.'), ''];
+    // Two lines per game when there's room, else one line each and the selected tagline below.
+    const roomy = rows >= this.games.length * 2 + 8;
     this.games.forEach((g, i) => {
       const sel = i === s.sel;
-      const best = this.save.highScores[g.id]?.score;
-      const name = `[${i + 1}] ${g.name}`;
-      const line = padRight(sel ? c.inverse(c.bold(` ${name} `)) : ` ${name} `, 26) + padRight(theme.muted(g.genre), 24) + theme.muted('best ') + (best ? theme.gold(fmt(best)) : theme.muted('-'));
+      const best = (this.save.highScores[g.id] ?? this.save.untimedScores[g.id])?.score;
+      const name = `[${i < 9 ? i + 1 : i === 9 ? 0 : ' '}] ${g.name}`;
+      const line = padRight(sel ? c.inverse(c.bold(` ${name} `)) : ` ${name} `, 28) + padRight(theme.muted(g.genre), 24) + theme.muted('best ') + (best ? theme.gold(fmt(best)) : theme.muted('-'));
       body.push((sel ? theme.primary('> ') : '  ') + line);
-      body.push('    ' + (sel ? theme.text(g.tagline) : theme.muted(g.tagline)));
+      if (roomy) body.push('    ' + (sel ? theme.text(g.tagline) : theme.muted(g.tagline)));
     });
+    if (!roomy) body.push('', '    ' + theme.text(this.games[s.sel].tagline));
     body.push('');
     body.push(keyHint([['Up/Down', 'select'], ['Enter', 'play'], ['Esc', 'back']]));
     return centerVertically(centerBlock(body, columns), rows);
@@ -1019,7 +1087,7 @@ export class App {
     body.push(theme.primary(c.bold(`Starting in ${secs}...`)));
     const hints: Array<[string, string]> = [['Enter', 'start now']];
     if (!s.session.daily) hints.push(['R', custom ? 'new seed' : 'reroll']);
-    if (!s.session.daily && def.untimed) hints.push(['T', untimed ? 'play timed' : 'play untimed']);
+    if (!s.session.daily && def.untimed && !def.untimedOnly) hints.push(['T', untimed ? 'play timed' : 'play untimed']);
     hints.push(['Esc', custom ? 'back' : 'menu']);
     body.push(keyHint(hints));
     return centerVertically(centerBlock(body, columns), rows);
@@ -1145,31 +1213,6 @@ export class App {
     return centerVertically(centerBlock(body, columns), rows);
   }
 
-  private renderTiming(s: Extract<State, { kind: 'timing' }>): string[] {
-    const { columns, rows } = this.io;
-    const w = Math.min(columns - 4, 76);
-    const opt = (i: number, name: string, desc: string) => {
-      const sel = i === s.sel;
-      const saved = (i === 1) === (this.save.settings.timing === 'untimed') ? theme.gold(' *') : '';
-      return [(sel ? theme.primary('> ') + c.inverse(c.bold(` [${i + 1}] ${name} `)) : `   [${i + 1}] ${name} `) + saved, '       ' + theme.muted(desc)];
-    };
-    const untimedGames = this.games.filter((g) => g.untimed).map((g) => (g.modeNames ? `${g.name} (${g.modeNames.untimed})` : g.name));
-    const body: string[] = [
-      theme.title('SESSION MODE'),
-      '',
-      ...opt(0, 'Timed', "Play within each game's time limit (Ski Survival: Survival Sprint)."),
-      '',
-      ...opt(1, 'Untimed', 'No countdown: play until game over, or press Esc to end the round.'),
-      '',
-      ...wrapText('Applies to Quick Play, the arcade and replays; T in the briefing flips a single round. The daily challenge is always timed. Untimed rounds keep separate personal bests.', w).map((l) => theme.muted(l)),
-      '',
-      ...wrapText(`Untimed play: ${untimedGames.join(', ')}. Bug Bash gets 5 lives instead of a clock. Custom Lua games are always timed.`, w).map((l) => theme.muted(l)),
-      '',
-      keyHint([['Up/Down', 'select'], ['Enter', 'keep'], ['1-2', 'choose'], ['Esc', 'back']]),
-    ];
-    return centerVertically(centerBlock(body, columns), rows);
-  }
-
   private renderThemes(s: Extract<State, { kind: 'themes' }>): string[] {
     const { columns, rows } = this.io;
     const ids = themeIds();
@@ -1257,7 +1300,7 @@ export class App {
       '',
     ];
     if (s.error) {
-      for (const l of wrapText(s.error, w)) body.push(theme.bad(l));
+      for (const l of wrapText(s.error, w).slice(0, 4)) body.push(theme.bad(l));
     } else body.push(theme.muted(truncate(`Relative paths start from ${process.cwd()}`, w)));
     body.push('');
     const hints: Array<[string, string]> = [['Enter', 'load']];
@@ -1337,24 +1380,19 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function wrapText(text: string, width: number): string[] {
-  const out: string[] = [];
-  let line = '';
-  for (const word of text.split(/\s+/)) {
-    if (line && line.length + 1 + word.length > width) {
-      out.push(line);
-      line = '';
-    }
-    line = line ? `${line} ${word}` : word.slice(0, width);
-  }
-  if (line) out.push(line);
-  return out.slice(0, 4);
-}
-
 function osUserName(): string {
   try {
     return os.userInfo().username || 'Player';
   } catch {
     return 'Player';
+  }
+}
+
+/** Run a best-effort read; the Agent screen shows "unknown" rather than failing. */
+function safely<T>(read: () => T): T | null {
+  try {
+    return read();
+  } catch {
+    return null;
   }
 }

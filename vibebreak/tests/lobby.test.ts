@@ -96,7 +96,7 @@ describe('Lobby', () => {
       lobby.hostCommand({ cmd: 'end' });
     }
     // With 3 players Battleship (2 max) is never chosen; consecutive games differ.
-    expect(picked.every((g) => g === 'prompt-panic' || g === 'doodle-protocol')).toBe(true);
+    expect(picked.every((g) => g === 'prompt-panic' || g === 'doodle-protocol' || g === 'racing')).toBe(true);
     for (let i = 1; i < picked.length; i++) expect(picked[i]).not.toBe(picked[i - 1]);
   });
 

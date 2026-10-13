@@ -67,9 +67,11 @@ export function generateSession(
   const rng = new Rng(seed).fork('session');
 
   // The daily challenge ignores the previous game so everyone gets the same one.
+  // The daily challenge is always timed, so games that can't be timed sit it out.
+  const pool = opts.daily ? games.filter((g) => !g.untimedOnly) : games;
   const game = opts.gameId
     ? games.find((g) => g.id === opts.gameId) ?? fail(`Unknown game: ${opts.gameId}`)
-    : pickGame(games, rng, opts.daily ? null : opts.previousGameId);
+    : pickGame(pool, rng, opts.daily ? null : opts.previousGameId);
 
   // Always consume the same number of rolls so forcing a game does not shift
   // the rest of the sequence unpredictably.
@@ -89,7 +91,10 @@ export function generateSession(
   // whether it is played timed or untimed.
   let timingNote: string | undefined;
   let untimed = !!opts.untimed;
-  if (untimed && opts.daily) {
+  if (game.untimedOnly) {
+    // Races end at the finish line; a deadline would cut them short.
+    untimed = true;
+  } else if (untimed && opts.daily) {
     untimed = false;
     timingNote = 'The daily challenge is always timed, so everyone plays the same round.';
   } else if (untimed && !game.untimed) {

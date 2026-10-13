@@ -20,8 +20,18 @@ export function statsLines(save: SaveData, games: readonly GameDefinition[], wid
     lines.push(theme.muted(`${rounds} total playtime`));
   }
   lines.push('');
-  lines.push(theme.muted(padRight('GAME', 20) + padRight('BEST', 9) + padRight('UNTIMED', 9) + padRight('PLAYS', 7) + 'HIGHLIGHT'));
-  for (const g of games) {
+  if (compact) {
+    // Short terminals: two games per row, best score (timed, else untimed) and plays.
+    const cell = (g: GameDefinition) => {
+      const best = save.highScores[g.id] ?? save.untimedScores[g.id];
+      const name = g.name.replace(/^Racing: /, 'Race: ');
+      return padRight(theme.primary(name.slice(0, 19)), 20) + padRight(best ? c.bold(fmt(best.score)) : theme.muted('-'), 8) + padRight(theme.muted(`x${save.gameStats[g.id]?.plays ?? 0}`), 7);
+    };
+    lines.push(theme.muted(padRight('GAME', 20) + padRight('BEST', 8) + padRight('PLAYS', 7) + '  ' + padRight('GAME', 20) + padRight('BEST', 8) + 'PLAYS'));
+    for (let i = 0; i < games.length; i += 2) lines.push(cell(games[i]) + '  ' + (games[i + 1] ? cell(games[i + 1]) : ''));
+  }
+  if (!compact) lines.push(theme.muted(padRight('GAME', 20) + padRight('BEST', 9) + padRight('UNTIMED', 9) + padRight('PLAYS', 7) + 'HIGHLIGHT'));
+  for (const g of compact ? [] : games) {
     const hs = save.highScores[g.id];
     const un = save.untimedScores[g.id];
     const gs = save.gameStats[g.id];
@@ -97,6 +107,9 @@ function gameHighlight(id: string, bests: Record<string, number>, totals: Record
     case 'dungeon': return theme.muted(`escapes ${fmt(totals.escaped ?? 0)}`);
     case 'tetris': return theme.muted(`most lines ${b('lines')}`);
     case 'crossy': return theme.muted(`farthest ${b('distance')} lanes`);
+    case 'racing': return theme.muted(`${fmt(totals.wins ?? 0)} wins, ${fmt(totals.podiums ?? 0)} podiums`);
+    case 'timetrial': return theme.muted(`${fmt(totals.runs ?? 0)} timed runs`);
+    case 'highway': return theme.muted(`farthest ${b('distance')}m, ${b('overtakes')} passed`);
     default: return '';
   }
 }

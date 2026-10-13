@@ -9,6 +9,9 @@ import { stripAnsi } from '../src/ui/style.js';
 import { LanClient } from '../src/net/client.js';
 import type { LanStart } from '../src/ui/lan/lan-screen.js';
 import type { BattleshipView } from '../src/games/multiplayer/battleship.js';
+import type { RaceNetView } from '../src/games/racing/mp.js';
+import { Track } from '../src/games/racing/track.js';
+import { netDriver } from '../src/games/racing/ai.js';
 import { FakeScheduler } from './helpers.js';
 
 const cleanup: Array<() => unknown> = [];
@@ -44,11 +47,63 @@ function arcade(start: LanStart | null, cols = 100, rows = 34) {
 }
 
 describe('LAN in the arcade UI', () => {
-  it('menu shows the LAN entries and H opens the host form', () => {
+  it('two players race each other through the real UI over TCP, steering with the keyboard', async () => {
+    const h = arcade({ mode: 'host', gameId: 'racing', name: 'Hostess', port: 0, immediate: true, options: { laps: 1 } }, 90, 30);
+    await waitFor(() => h.app.lan?.lanClient?.lobby, 4000, 'host lobby', h.pump);
+    const port = h.app.lan!.lanServer!.port;
+    const j = arcade({ mode: 'join', host: '127.0.0.1', port, name: 'Joiner', immediate: true }, 90, 30);
+    const both = () => { h.pump(); j.pump(); };
+    await waitFor(() => h.text().includes('Joiner'), 4000, 'host sees joiner', both);
+    j.io.send('r');
+    await waitFor(() => h.app.lan!.lanClient!.lobby!.members.every((m) => m.ready), 4000, 'ready', both);
+    h.io.send('s');
+    await waitFor(() => /LAP 1\/1/.test(j.text()) && /LAP 1\/1/.test(h.text()), 8000, 'race screen', both);
+
+    // Each player presses keys based only on what their own screen's client knows.
+    const keys: Record<string, string> = { l: 'a', r: 'd', g: 'w', b: 's', d: ' ' };
+    const drive = (a: typeof h) => {
+      const cv = a.app.lan?.lanClient?.view;
+      if (!cv || cv.gameId !== 'racing') return;
+      const v = cv.view as RaceNetView;
+      const me = v.cars.find((c) => c[0] === v.you);
+      if (!me || v.phase !== 'racing' || me[7] >= 0) return;
+      const t = new Track({ seed: v.seed, kind: 'circuit', preset: v.preset, conditions: v.conditions });
+      const pos = (c: RaceNetView['cars'][number]) => ({ off: c[1] / 100, d: c[2] / 100, v: c[3] / 10 });
+      for (const p of netDriver(t, pos(me), v.cars.filter((c) => c !== me).map(pos))) a.io.send(keys[p]);
+    };
+    let midRace = '';
+    await waitFor(() => /RESULTS/.test(h.text()) && /RESULTS/.test(j.text()), 90_000, 'race finished', () => {
+      both();
+      drive(h);
+      drive(j);
+      if (!midRace && /POS [12]\/2/.test(j.text()) && /km\/h/.test(j.text())) {
+        const v = j.app.lan!.lanClient!.view!.view as RaceNetView;
+        if (v.t > 6000) midRace = j.text();
+      }
+    });
+    // Mid-race, the joiner saw the road, their own car and live standings.
+    // Each racer keeps their grid slot's car: the joiner (second to join) drives the open-wheeler.
+    expect(midRace).toContain('o=#=o');
+    expect(midRace).toMatch(/[12]\. YOU/);
+    expect(midRace).toMatch(/[12]\. Hostess/);
+    expect(midRace).toMatch(/=\|/);
+    // Both screens show the same server-decided result.
+    const headline = (t: string) => /(Hostess|Joiner) wins in \d:\d\d\.\d\d/.exec(t)?.[0];
+    expect(headline(h.text())).toBeTruthy();
+    expect(headline(j.text())).toBe(headline(h.text()));
+    // The fast race tick is over: the server is back to its normal pace.
+    expect(h.app.lan!.lanServer!.lobby.desiredTickMs).toBeNull();
+  }, 120_000);
+
+  it('MULTIPLAYER lists the LAN entries, and the H shortcut still opens the host form', () => {
     const a = arcade(null, 100, 34);
-    expect(a.text()).toContain('HOST LAN GAME');
-    expect(a.text()).toContain('JOIN LAN GAME');
+    expect(a.text()).toContain('[4] MULTIPLAYER');
+    a.io.send('4');
+    expect(a.text()).toContain('HOST A LAN GAME');
+    expect(a.text()).toContain('JOIN A LAN GAME');
     expect(a.text()).toContain('PARTY MODE');
+    a.io.send('\x1b');
+    expect(a.app.stateKind).toBe('menu');
     a.io.send('h');
     expect(a.app.stateKind).toBe('lan');
     expect(a.text()).toContain('HOST A LAN GAME');

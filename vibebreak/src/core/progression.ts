@@ -1,5 +1,5 @@
 import type { GameDefinition, GameResult, SessionConfig } from './types.js';
-import type { SaveData } from '../storage/save.js';
+import { MAX_GHOST, type SaveData } from '../storage/save.js';
 
 /**
  * XP, levels, achievements and stat aggregation. Pure functions over
@@ -145,6 +145,7 @@ export function recordRound(
     ...(session.durationMs === null ? { untimed: true } : {}),
   });
   if (save.history.length > 20) save.history.splice(0, save.history.length - 20);
+  saveTimeRecords(save, session, result, now);
 
   let dailyBest: number | undefined;
   if (session.daily) {
@@ -227,4 +228,20 @@ export function recordLanMatch(save: SaveData, m: LanMatchSummary, now = new Dat
   }
   const ids = ['lan-party', ...(m.won && LAN_WIN_ACHIEVEMENT[m.gameId] ? [LAN_WIN_ACHIEVEMENT[m.gameId]] : [])];
   return ids.filter((id) => unlock(save, id, now)).map((id) => getAchievement(id)!);
+}
+
+/** Keep each best time only if it beats the stored one for its key (lower is better). */
+export function saveTimeRecords(save: SaveData, session: SessionConfig, result: GameResult, now = new Date()): string[] {
+  const improved: string[] = [];
+  for (const r of result.records ?? []) {
+    if (!Number.isFinite(r.ms) || r.ms <= 0 || r.key.length > 120) continue;
+    const prev = save.timeRecords[r.key];
+    if (prev && prev.ms <= r.ms) continue;
+    save.timeRecords[r.key] = {
+      ms: Math.round(r.ms), at: now.toISOString(), seed: session.seed, splits: r.splits.slice(0, 20),
+      ...(r.ghost?.length ? { ghost: r.ghost.slice(0, MAX_GHOST) } : {}),
+    };
+    improved.push(r.key);
+  }
+  return improved;
 }

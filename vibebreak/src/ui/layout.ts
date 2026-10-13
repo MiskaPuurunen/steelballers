@@ -66,7 +66,7 @@ export function spread(left: string, right: string, width: number): string {
 
 export function hudLine(items: HudItem[]): string {
   return items
-    .map((it) => theme.muted(it.label + ' ') + (it.tone ? toneFn(it.tone) : c.bold)(it.value))
+    .map((it) => (it.label ? theme.muted(it.label + ' ') : '') + (it.tone ? toneFn(it.tone) : c.bold)(it.value))
     .join(theme.muted('  |  '));
 }
 

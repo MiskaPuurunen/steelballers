@@ -110,6 +110,12 @@ export interface MpGameDefinition {
   options: MpOptionSpec[];
   /** Action kinds spectators may send (e.g. a canvas re-sync); everything else is players only. */
   spectatorActions?: string[];
+  /**
+   * How often (ms) the server ticks a running match and pushes views. Turn-based
+   * games leave this unset (the server's default, 200ms); real-time games such
+   * as racing ask for more.
+   */
+  tickMs?: number;
   create(ctx: MatchContext): MpMatch;
 }
 

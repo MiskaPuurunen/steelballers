@@ -64,6 +64,20 @@ export const sessionTiming = (s: Pick<SessionConfig, 'durationMs'>): Timing => (
 
 /* ----------------------------------------------------------------- games */
 
+/**
+ * A best time (lower is better), e.g. a Time Trial on one seed. Kept apart
+ * from scores, which are always higher-is-better.
+ */
+export interface TimeRecord {
+  ms: number;
+  at: string;
+  seed: string;
+  /** Split times (e.g. per lap). */
+  splits: number[];
+  /** Optional replay samples for a ghost (game-defined encoding, capped in size). */
+  ghost?: number[];
+}
+
 export interface GameContext {
   rng: Rng;
   difficulty: Difficulty;
@@ -72,6 +86,8 @@ export interface GameContext {
   durationMs: number | null;
   /** The player's best score for this game so far (for HUD display). */
   personalBest?: number;
+  /** Saved best times, by game-defined key (read-only). */
+  records?: Readonly<Record<string, TimeRecord>>;
 }
 
 export type EndReason = 'time' | 'gameover' | 'win' | 'quit';
@@ -85,6 +101,8 @@ export interface GameResult {
   metrics: Array<[label: string, value: string]>;
   /** A flawless round (definition is per-game). */
   perfect: boolean;
+  /** Best-time candidates: saved only if faster than the stored record for the key. */
+  records?: Array<{ key: string; ms: number; splits: number[]; ghost?: number[] }>;
 }
 
 export type Tone = 'good' | 'bad' | 'gold' | 'info';
@@ -139,6 +157,14 @@ export interface GameDefinition {
    * their own (game over, lives) or are fun to play until you quit.
    */
   untimed?: boolean;
+  /**
+   * The game always ends on its own (e.g. a race ends at the finish line) and
+   * must never get a deadline: every session is untimed. Implies `untimed`.
+   * Such games are never picked for the daily challenge, which is always timed.
+   */
+  untimedOnly?: boolean;
+  /** Replaying from the results screen keeps the seed (e.g. retry the same Time Trial track). */
+  retrySameSeed?: boolean;
   /** Friendly names for the timed and untimed modes (e.g. Survival Sprint / Endless Mountain). */
   modeNames?: { timed: string; untimed: string };
   /** Points per XP — normalises XP across games with different score scales. */

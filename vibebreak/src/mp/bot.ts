@@ -3,6 +3,9 @@ import type { LanClient, CurrentView } from '../net/client.js';
 import { FLEET, SIZE, randomFleet, shipCells, type BattleshipView } from '../games/multiplayer/battleship.js';
 import type { PromptPanicView } from '../games/multiplayer/prompt-panic.js';
 import { WORDS, type DoodleView } from '../games/multiplayer/doodle.js';
+import type { RaceNetView } from '../games/racing/mp.js';
+import { Track } from '../games/racing/track.js';
+import { netDriver } from '../games/racing/ai.js';
 
 /**
  * A simple automated player that speaks the real protocol through a
@@ -41,6 +44,9 @@ export class Bot {
   private actAt = 0;
   private done = '';
   private readonly thinkMs: [number, number];
+  /** Racing is real-time: the bot drives continuously instead of taking turns. */
+  private raceTrack: { key: string; track: Track } | null = null;
+  private lastDrive = 0;
 
   constructor(private readonly client: LanClient, private readonly opts: BotOptions = {}) {
     this.rng = new Rng(opts.seed ?? makeSeed());
@@ -74,6 +80,7 @@ export class Bot {
     const lobby = this.client.lobby;
     if (!v || !lobby || lobby.phase !== 'match' || v.matchId !== lobby.matchId || this.client.status !== 'online') return;
     const now = Date.now();
+    if (v.gameId === 'racing') return this.drive(v.view as RaceNetView, now);
     const key = this.situation(v);
     if (!key || key === this.done) return;
     if (key !== this.planned) {
@@ -84,6 +91,19 @@ export class Bot {
     if (now < this.actAt) return;
     this.done = key;
     this.act(v);
+  }
+
+  /** One driving decision every ~60ms, sent as a normal input batch. */
+  private drive(v: RaceNetView, now: number): void {
+    if (!v.you || v.phase !== 'racing' || now - this.lastDrive < 60) return;
+    this.lastDrive = now;
+    const key = `${v.seed}:${v.preset}:${v.conditions}`;
+    if (this.raceTrack?.key !== key) this.raceTrack = { key, track: new Track({ seed: v.seed, kind: 'circuit', preset: v.preset, conditions: v.conditions }) };
+    const mine = v.cars.find((c) => c[0] === v.you);
+    if (!mine || mine[7] >= 0) return;
+    const pos = (c: RaceNetView['cars'][number]) => ({ off: c[1] / 100, d: c[2] / 100, v: c[3] / 10 });
+    const presses = netDriver(this.raceTrack.track, pos(mine), v.cars.filter((c) => c[0] !== v.you).map(pos));
+    if (presses) this.client.sendAction({ kind: 'in', p: presses });
   }
 
   /** A key that changes whenever the bot has something new to do (empty = nothing to do). */

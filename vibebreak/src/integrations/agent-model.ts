@@ -419,7 +419,6 @@ const RANK: Record<AiStatus, number> = {
   WAITING_FOR_INPUT: 0, ERROR: 1, WORKING: 2, THINKING: 2, COMPLETED: 3, UNKNOWN: 4, IDLE: 5,
 };
 
-export const isActive = (s: AiStatus) => s === 'THINKING' || s === 'WORKING' || s === 'WAITING_FOR_INPUT';
 
 /**
  * Choose the session the HUD should talk about. A preferred session (the

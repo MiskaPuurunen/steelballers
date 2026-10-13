@@ -5,6 +5,7 @@ VibeBreak can host party and versus games on your local network. One person host
 | Game | Type | Players | In one line |
 |---|---|---|---|
 | **Battleship** | Versus | 2 (others spectate) | Hide your fleet, find theirs. Classic 10×10 naval duel |
+| **VibeBreak Racing** | Versus | 2–8 (+ AI rivals) | Real-time ASCII racing on one seeded track. First across the line wins |
 | **Prompt Panic** | Party | 3–8 (2 works) | Answer absurd prompts, vote anonymously for the funniest |
 | **Doodle Protocol** | Party | 3–8 (2 works) | One player draws a secret word in ASCII, everyone else guesses |
 | **Party Mix** | Party | 2–8 | A random game each match (never the same one twice in a row) |
@@ -29,9 +30,9 @@ vibebreak join                              # browse rooms found on the network
 vibebreak rooms                             # just list them
 ```
 
-You can do all of this from the menu too: **[H] Host LAN game**, **[J] Join LAN game** and **[P] Party mode**.
+You can do all of this from the menu too: **[4] MULTIPLAYER** has *Host*, *Join* and *Party mode* (shortcuts `H`, `J`, `P` from the main menu). A standalone window (`vibebreak --standalone`) joins and hosts exactly like an inline one: same code, same protocol.
 
-The LAN games are separate from your Lua [custom games](CUSTOM_GAMES.md) (**[6]** in the menu), which are single-player. Custom games can't be played over the network yet.
+The LAN games are separate from your Lua [custom games](CUSTOM_GAMES.md) (**[5]** in the menu), which are single-player. Custom games can't be played over the network yet.
 
 ## Network setup
 
@@ -101,7 +102,7 @@ The host is a normal player who also runs the server inside their own VibeBreak 
 ```
 status                 players, game and phase
 start [force]          start the match
-game <id>              battleship | prompt-panic | doodle-protocol | random
+game <id>              battleship | prompt-panic | doodle-protocol | racing | random
 set <key> <value>      change a game option
 max <n>                player limit
 kick <name>            remove a player
@@ -130,6 +131,19 @@ vibebreak list        # shows every option and its legal values
 - **Options:** turn timer (off/20/30/60 s; running out skips your turn), placement timer (off/60/90/120 s; running out auto-deploys your fleet), and the leave rule.
 - After the match you see your shots, hits, accuracy and ships sunk. The host can start a rematch.
 - If more than two people are in the lobby, the first two by join order play and everyone else spectates.
+
+### VibeBreak Racing (2–8 players)
+
+Everyone races the same seeded circuit at the same time, with the same rules and physics as the singleplayer Grand Prix (see the README). Controls: `A`/`D` steer, `W` gas (stays on), `S` brake, `Space` drift.
+
+- **Start:** after the lobby's intro, a 4-second countdown runs on the host's clock, so the green light is the same moment for everyone. Cars line up two by two in join order.
+- **During the race:** the HUD shows your lap, position, speed and race time, and a standings panel sits beside the road when the terminal is wide enough. Rivals carry name tags.
+- **The finish:** the first person across the line opens a **finish window** (15/30/60 s). The race ends when every racer still in it has finished, or when the window closes. Anyone still on track is classified by distance covered. Points: 10, 8, 6, 5, 4, 3, 2, 1 by overall place (AI rivals included), and 0 for anyone who didn't finish.
+- **Options:** laps (1/2/3/5), AI rivals (0–3, run by the host), track and AI difficulty (easy/normal/hard), weather (random, or clear, dusk, rain, snow or night), and the finish window.
+- **The host decides everything.** Clients send only key presses, batched into one small message at most every 40 ms. The host checks each batch (only the five known inputs, at most 12 per message), feeds it through the same rate-limited input the singleplayer game uses, and runs the race on its own clock at 30 ticks a second. Laps, positions, collisions, finish times and results are all computed there. No message can set a car's speed, position or lap; anything else is refused.
+- **What goes over the network:** at the start, nothing about the track except its seed, difficulty and weather. Every client builds the identical track from those (a test checks they match row for row). During the race, each tick sends a compact snapshot: per car its offset, distance, speed, steer, a few flags, laps, finish time and damage, as integers. That's under 1 KB a tick for a full grid. Clients blend between snapshots so cars move smoothly at any frame rate, and your own car leans the moment you steer.
+- **Disconnects:** if your connection drops, your car is **ghosted**: an autopilot keeps it rolling gently in its lane, well below race pace, and it can't hit or be hit. Nobody wins or loses because of a Wi-Fi blip. Reconnect within the grace period (60 s) and the car is yours again. If you don't come back in time, you retire (DNF, no points) and the race carries on without you. If the host quits, the race ends for everyone with *The host closed the lobby*.
+- **Server tick:** real-time games can ask the server for a faster tick. Racing uses 33 ms while a race runs; the other games keep the default 200 ms, and the server drops back to it after the race.
 
 ### Prompt Panic (3–8 players)
 
@@ -211,3 +225,4 @@ Monetization ideas are in the [business plan](BUSINESS_PLAN.md). None of them is
 - **The host is the server:** if the host's VibeBreak exits, the lobby ends. There is no host migration.
 - **Moderation:** the word filter is basic; the host's veto and kick are the real moderation tools.
 - **LAN stats:** they record what the host reported. They're for fun, not proof.
+- **Racing over a slow network:** clients don't predict their own car, so what you see trails the host by about one network round trip plus a tick (around 50–80 ms on a home LAN). That's fine on a LAN, but racing over a VPN or a congested Wi-Fi feels laggy. The two-player race was verified with separate processes on one machine (`tests/multiprocess.test.ts`), not yet across physical machines.

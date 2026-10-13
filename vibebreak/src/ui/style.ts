@@ -16,10 +16,6 @@ export function setColor(enabled: boolean): void {
   colorEnabled = enabled;
 }
 
-export function isColorEnabled(): boolean {
-  return colorEnabled;
-}
-
 export function setColorDepth(depth: 16 | 256): void {
   colorDepth = depth;
 }

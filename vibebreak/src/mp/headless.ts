@@ -37,7 +37,7 @@ export const CONSOLE_HELP = [
   'Commands:',
   '  status                 players, game and phase',
   '  start [force]          start the match (force = even if not everyone is ready)',
-  '  game <id>              battleship | prompt-panic | doodle-protocol | random',
+  '  game <id>              battleship | prompt-panic | doodle-protocol | racing | random',
   '  set <key> <value>      change a game option (see "vibebreak list")',
   '  max <n>                player limit',
   '  kick <name>            remove a player',

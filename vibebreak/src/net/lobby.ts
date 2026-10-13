@@ -578,6 +578,12 @@ export class Lobby {
 
   /* -------------------------------------------------------------- time */
 
+  /** The tick interval the running game wants (ms), or null for the server default. */
+  get desiredTickMs(): number | null {
+    if (!this.running || (this.phase !== 'match' && this.phase !== 'intro')) return null;
+    return this.running.def.tickMs ?? null;
+  }
+
   tick(): void {
     if (this.closed) return;
     const now = this.now();

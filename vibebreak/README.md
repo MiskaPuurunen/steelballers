@@ -4,11 +4,11 @@
 
 VibeBreak is a terminal arcade for developers who work with AI coding agents like Claude Code and Codex. While the agent writes, debugs or refactors, you play a 20–60 second keyboard game in your terminal instead of opening social media. When the round ends you get your score, some XP, and a one-key exit back to work.
 
-- **7 minigames:** Bug Bash, Terminal Snake, Ski Survival, Stack Overflow, Dependency Dungeon, Crossy Prod and Tetris.
-- **Timed or untimed:** every built-in game can be played without a countdown (`--no-timer`, or **[T] TIMER** in the menu). Untimed rounds end on game over or when you choose to stop.
+- **10 minigames:** Bug Bash, Terminal Snake, Ski Survival, Stack Overflow, Dependency Dungeon, Crossy Prod, Tetris, and **VibeBreak Racing** in three modes: Grand Prix, Time Trial and Highway.
+- **Timed or untimed:** every built-in game can be played without a countdown (`--no-timer`, or **[8] SETTINGS > Timer** in the menu). Untimed rounds end on game over or when you choose to stop.
 - **Random sessions:** each round rolls a game, a difficulty and a modifier such as *Overclocked*, *Glass Cannon* or *Chaos Mode*. Runs are seeded, so any session can be replayed exactly.
 - **Daily challenge:** one seed per day, the same for everyone, with a share card you can paste.
-- **LAN multiplayer:** host a lobby, friends join from their own terminals on the same network. **Battleship** (versus), **Prompt Panic** (write the funniest answer, vote anonymously) and **Doodle Protocol** (ASCII draw-and-guess), or a random **Party Mix**. Server-authoritative, no accounts, no internet. See [docs/LAN.md](docs/LAN.md).
+- **LAN multiplayer:** host a lobby, friends join from their own terminals on the same network. **Battleship** (versus), **VibeBreak Racing** (2-8 drivers, real time), **Prompt Panic** (write the funniest answer, vote anonymously) and **Doodle Protocol** (ASCII draw-and-guess), or a random **Party Mix**. Server-authoritative, no accounts, no internet. See [docs/LAN.md](docs/LAN.md).
 - **Progression:** high scores, XP, levels and 20 achievements. All of it is stored locally, with no account and no telemetry.
 - **Optional Claude Code integration:** a status line shows what Claude is doing (thinking, running a tool, waiting for you, done) while you play, per session, with how fresh the information is.
 - **Themes:** Classic, Christmas, Halloween, Frutiger Aero, Synthwave, Matrix and Amber CRT, plus a Seasonal option that switches by date. Each theme recolours the whole arcade and adds its own ambient effects (snow, bats, bubbles, digital rain…) around the menus.
@@ -26,15 +26,14 @@ VibeBreak is a terminal arcade for developers who work with AI coding agents lik
 YOUR AI IS THINKING. YOU'RE PLAYING._
 
 >  [1] QUICK PLAY  random game, random modifier
-   [2] ARCADE
+   [2] GAMES
    [3] DAILY CHALLENGE
-   [4] STATS & ACHIEVEMENTS
-   [5] THEMES
-   [6] CUSTOM GAMES
-   [T] TIMER: ON
-   [H] HOST LAN GAME
-   [J] JOIN LAN GAME
-   [P] PARTY MODE
+   [4] MULTIPLAYER
+   [5] CUSTOM GAMES
+   [6] STATS & ACHIEVEMENTS
+   [7] AGENT STATUS
+   [8] SETTINGS
+   [9] HELP & ABOUT
    [Q] QUIT
 ```
 
@@ -56,6 +55,8 @@ vibebreak           # or: node dist/cli/index.js
 ```
 
 Without `npm link`, run `npm start` for the menu, or `node dist/cli/index.js play`.
+
+**In VS Code:** open the integrated terminal (``Ctrl+` ``) and run `vibebreak` (or `npm start`). The arcade draws inside the terminal panel; make the panel at least 80×24, or run `vibebreak --standalone` to give it its own window. See [Where it runs](#where-it-runs-this-terminal-or-its-own-window).
 
 **Windows PowerShell 5.1** (the built-in one) doesn't support `&&`. Run the commands one per line, or separate them with `;`:
 
@@ -79,13 +80,38 @@ The package is named `vibebreak-cli` because `vibebreak` on npm belongs to an un
 
 Use a global install for the hook setup. `npx` runs from a temporary cache, so the hook paths would point somewhere that can disappear.
 
+## Where it runs: this terminal or its own window
+
+`vibebreak` always opens the **main menu**. Nothing starts until you pick something: not a saved preference, not the AI agent getting busy. Choose *where* the arcade draws with `--interface`, or save a default in **[8] SETTINGS > Interface**.
+
+| Command | What happens |
+|---|---|
+| `vibebreak` | The saved interface (default `auto`) |
+| `vibebreak --interface terminal` | Runs right here. Works in the **VS Code integrated terminal**, Windows Terminal, PowerShell, iTerm2, Terminal.app, tmux and most Linux terminals |
+| `vibebreak --interface standalone` (or `--standalone`) | Opens a **new terminal window** running the arcade and gives this terminal back. Same save file, settings, LAN games and agent status |
+| `vibebreak --interface auto` | This terminal. With no terminal at all (a pipe, a script) it explains how to open a window instead of opening one by itself |
+| `vibebreak --list-interfaces` | What each option does, which terminal was detected, and what `vibebreak` would do here |
+
+The flag works with every interactive command (`vibebreak play --game snake --standalone`, `vibebreak host --standalone`...). The command line always beats the saved setting.
+
+**How the window opens:**
+
+| Platform | Window |
+|---|---|
+| Windows inside Windows Terminal | a new Windows Terminal window (`wt -w new`) |
+| Windows elsewhere (VS Code, PowerShell, cmd) | a new console window (`start`), which is Windows Terminal if it's your default terminal app |
+| macOS | a new Terminal.app window |
+| Linux | `$VIBEBREAK_TERMINAL`, else `$TERMINAL`, else `x-terminal-emulator` when a desktop session is running (inside tmux: a new tmux window) |
+
+**Safety:** a standalone window never opens a second arcade (if one is already running you're told so), and the window itself always runs with `--interface terminal`, so it can't open another window. If no window can be opened (no desktop, terminal not installed), VibeBreak says why and starts in the current terminal instead. If the arcade hits an error inside a standalone window, the window waits for Enter so you can read the message.
+
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `vibebreak` | Open the arcade menu |
 | `vibebreak play` | Start a random minigame right away (a short briefing counts down first) |
-| `vibebreak play --game snake` | Play a specific game: `bugbash`, `snake`, `ski`, `stack`, `dungeon`, `crossy`, `tetris` |
+| `vibebreak play --game snake` | Play a specific game: `bugbash`, `snake`, `ski`, `stack`, `dungeon`, `crossy`, `tetris`, `racing`, `timetrial`, `highway` |
 | `vibebreak play --duration 30` | Set the round's time limit in seconds (15–300) |
 | `vibebreak play --game snake --no-timer` | Untimed round: no countdown, play until game over or Esc (`--untimed` works too) |
 | `vibebreak play --game ski --mode endless` | Ski Survival's Endless Mountain (`--mode sprint` = Survival Sprint, timed) |
@@ -151,7 +177,7 @@ Race down an endless, procedurally generated mountain drawn in multi-line ASCII 
   - **Survival Sprint** (timed, 60 s by default): score as much as you can before time runs out.
   - **Endless Mountain** (untimed): no countdown, ever. You ski until you run out of lives, fall into a crevasse or quit. Distance, speed, lives and your best stay on screen.
 
-  Pick the mode with `T` in the briefing, `--mode sprint|endless`, or the **[T] TIMER** menu.
+  Pick the mode with `T` in the briefing, `--mode sprint|endless`, or **[8] SETTINGS > Timer**.
 
 ### Stack Overflow: timing & precision (45s)
 A block slides back and forth. Press **Space** to drop it. Any overhang is sliced off, so the platform shrinks. A perfect drop keeps the block's full width, and three perfect drops in a row grow it back by one. The round ends if a block misses the tower completely. On Easy, a drop that is off by one cell still counts as perfect.
@@ -178,6 +204,37 @@ The classic, in plain ASCII. All seven tetrominoes come from a **7-bag** randomi
 
 Clearing 1, 2, 3 or 4 lines at once scores 100, 300, 500 or 800 × level. You level up every 10 lines (Easy starts at level 1, Normal at 2, Hard at 4), and gravity follows the guideline curve, so pieces fall faster each level. If a new piece can't spawn, you've topped out and the game is over. The side panel shows score, level, lines and your personal best, and the controls stay on screen the whole time. The well is 10 × 16 rather than the usual 20 rows, so the game fits an 80 × 24 terminal with the HUD. Chaos Mode pushes up a garbage line every 12–18 seconds ("Merge conflict!"). Low Battery and Glass Cannon are never rolled for Tetris, because it has no lives or penalties.
 
+### VibeBreak Racing: Grand Prix, Time Trial and Highway
+A top-down ASCII racer on a vertically scrolling road: dashed lanes, red-and-white kerbs, grass verges, barriers, curves that sweep across the screen, roadside trees and rocks (borrowed from Ski Survival), and rain, snow, dusk or night. Your car sits near the bottom so most of the screen is road ahead, and a `!` at the top edge warns about hazards just over the horizon. Rivals carry name tags and their own colours, and far-away cars are drawn smaller.
+
+| Mode | Arcade id | How it plays |
+|---|---|---|
+| **Grand Prix** | `racing` | 3 laps against three AI rivals of different skill. You start at the back. Points by finishing place (1000/700/500/350), +200 for a clean race. A live standings panel sits beside the road when there's room |
+| **Time Trial** | `timetrial` | 2 laps alone on a seeded track. Lap splits are compared with your best, and your best run drives alongside you as a faded **ghost**. Best times are saved per track and difficulty, and replaying from the results screen keeps the same track. Being slower than your record never ends the run |
+| **Highway** | `highway` | Weave through endless traffic that gets denser with distance. 1 point per metre, +25 per car passed (+40 for a close call), coins, and wrenches that repair damage. **Endless Highway** (untimed) ends only when your car is wrecked or you quit; **Rush Hour** is the timed version |
+
+| Key | Action |
+|---|---|
+| `A`/`D` or `←`/`→` | Steer: each press nudges your line, holding it swerves |
+| `W` or `↑` | Gas. It stays on until you brake |
+| `S` or `↓` | Brake while held, then coast |
+| `Space` | Drift: a burst of grip through a bend, for a little speed |
+| `P` / `R` / `Q` | Pause / restart (same track) / end the race (`Esc` also pauses) |
+
+- **Why these controls:** terminals report key presses, never key releases, so the gas latches on and the brake holds only while the key repeats. Two quick presses are just a slightly bigger move, never a spin.
+- **Physics:** speed builds up to a capped top speed, the grass is slow, the barrier scrapes speed (and paint), and bends push a car outward when it's faster than the grip allows, more so in rain and snow. Brake, drift or steer against it. Contact with another car slows the car behind and nudges both apart. Cones and potholes cost speed, oil spins you for a moment, barrels hurt. Collisions use each car's body, not its decorative wheel arches.
+- **Fair tracks:** every track is built from a seed with smooth, closed curves whose sharpness is capped. Narrow sections still leave over two lanes, hazards are spaced out, never near the start line, and always leave two lanes' width clear. Tests check this across 120 generated tracks.
+- **Races never get a deadline.** Grand Prix and Time Trial end at the finish line, so they ignore the timed/untimed setting and sit out the daily challenge. Highway supports both.
+- **Modifiers** apply to every car alike (Overclocked makes the whole field faster). Chaos Mode adds crosswinds.
+
+```bash
+vibebreak play --game racing             # Grand Prix
+vibebreak play --game timetrial --seed MONZA-1   # same seed, same track: chase your record
+vibebreak play --game highway --mode endless
+```
+
+Racing also works over LAN: see [LAN multiplayer](#lan-multiplayer).
+
 ## LAN multiplayer
 
 One person hosts and everyone else joins from their own terminal on the same network:
@@ -190,6 +247,7 @@ vibebreak join 192.168.1.42          # friends: join with the address the host's
 | Game | Players | How it plays |
 |---|---|---|
 | **Battleship** | 2 (+ spectators) | Place your fleet with the cursor, by typing coordinates like `B4`, or at random, then take turns firing. The server checks every placement and shot, and you never receive the enemy's unhit ship positions |
+| **VibeBreak Racing** | 2–8 (+ AI rivals) | The same racing engine as singleplayer, run on the host. Clients only send key presses; the host's machine simulates the race and decides laps, positions and the finish order. Live standings, a countdown and synchronized start, a finish window for stragglers, rematches. Disconnected racers coast on autopilot until they reconnect |
 | **Prompt Panic** | 3–8 | Everyone answers the same absurd prompt (161 original prompts in 8 categories, plus custom JSON packs). Answers are shown anonymously, everyone votes, and votes become points. No self-votes, no double votes |
 | **Doodle Protocol** | 3–8 | The artist draws a secret word on a 30×12 ASCII canvas while everyone else guesses. Strokes are sent as small changes, and the word stays on the server until the reveal |
 | **Party Mix** | 2–8 | `vibebreak host --party`: a random game each match, with a "next game" transition between them |
@@ -202,7 +260,7 @@ Try it on one machine: `npm run build && node scripts/lan-demo.mjs`. This runs a
 
 ## Themes
 
-Open **[5] THEMES** from the menu. Moving the selection previews each theme live (logo, colours, effects). `Enter` keeps it, and `Esc` goes back to what you had. You can also run `vibebreak theme <id>`, or `--theme <id>` for a single run.
+Open **[8] SETTINGS > Theme** from the menu. Moving the selection previews each theme live (logo, colours, effects). `Enter` keeps it, and `Esc` goes back to what you had. You can also run `vibebreak theme <id>`, or `--theme <id>` for a single run.
 
 | Theme | id | Look |
 |---|---|---|
@@ -218,12 +276,12 @@ Open **[5] THEMES** from the menu. Moving the selection previews each theme live
 - **What a theme changes:** the arcade's palette, the logo gradient, the separators, the menu tagline and ambient particles.
 - **Particles:** they only fill empty space around the menu, briefing, results and stats screens. They are never drawn on a game board.
 - **During play:** themes only recolour borders and separators, so games stay readable. Game pieces keep their own colours.
-- **Animation off:** press `A` on the THEMES screen to turn ambient animation off (saved).
-- **Colour depth:** themes use 256-colour shades when the terminal supports them (Windows Terminal, iTerm2, most Linux terminals; the THEMES screen shows what was detected). Otherwise they fall back to the 16 standard colours. `NO_COLOR` still turns colour off completely.
+- **Animation off:** **[8] SETTINGS > Animations**, or `A` on the theme screen (saved).
+- **Colour depth:** themes use 256-colour shades when the terminal supports them (Windows Terminal, iTerm2, most Linux terminals; the theme screen shows what was detected). Otherwise they fall back to the 16 standard colours. `NO_COLOR` still turns colour off completely.
 
 ## Custom games (Lua)
 
-Open **[6] CUSTOM GAMES** in the menu to play games you write yourself.
+Open **[5] CUSTOM GAMES** in the menu to play games you write yourself.
 
 - **`N`** opens the editor with a working example game.
 - **`P`** opens the editor so you can paste code (Ctrl+V or right-click) or write it. **`Ctrl+S`** checks it and adds it.
@@ -248,9 +306,10 @@ Scripts are untrusted, so they run in a sandbox: Lua 5.4 in WebAssembly with no 
 
 Every round is either **timed** (the default: a gameplay countdown, 30–90 s depending on the game) or **untimed** (no gameplay deadline at all).
 
-- **How to choose:** `vibebreak play --no-timer` (or `--mode endless`), **[T] TIMER** in the menu (saved as your default for Quick Play, the arcade and replays), or `T` on the briefing screen to flip just that round. `--timer` forces a timed round.
+- **How to choose:** `vibebreak play --no-timer` (or `--mode endless`), **[8] SETTINGS > Timer** in the menu (shortcut `T`; saved as your default for Quick Play, the games list and replays), or `T` on the briefing screen to flip just that round. `--timer` forces a timed round.
 - **What untimed means:** there is no countdown and nothing in the HUD counting down ("NO TIMER" instead). Nothing ends because time ran out, and no points are given or taken for time spent. The game keeps animating and updating. Rounds end on the game's own conditions (crash, top-out, lives, escape) or when you press Esc and choose *End round*. Pause, restart and `Ctrl+C` work as always.
-- **Supported games:** all seven built-in games.
+- **Supported games:** all built-in games.
+  - **Racing: Grand Prix** and **Time Trial** are always untimed: a race ends at the finish line. **Racing: Highway** is *Endless Highway* untimed and *Rush Hour* timed.
   - Snake, Stack Overflow, Dependency Dungeon (no escape time bonus untimed), Crossy Prod, Tetris and Ski Survival (Endless Mountain) end on their usual game over.
   - **Bug Bash** has no natural end, so untimed it gives you 5 lives instead of a clock, and misses cost points but not time.
 - **Not untimed:** custom Lua games and the **daily challenge** are always timed, so daily scores stay comparable. Asking for untimed there shows a note and plays timed.
@@ -459,7 +518,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
 | Box characters in the logo look broken | Use a font with box-drawing glyphs (Cascadia, Menlo, DejaVu Sans Mono…). Below 70 columns the logo switches to a compact text version |
 | Colours look wrong / you want none | `vibebreak --no-color` or `NO_COLOR=1` |
 | Arrow keys don't work on old Windows conhost | Use Windows Terminal, or WASD/HJKL |
-| "needs an interactive terminal" | The arcade needs a TTY. Run it directly, not through a pipe |
+| "needs an interactive terminal" | The arcade needs a TTY. Run it directly, not through a pipe, or use `vibebreak --standalone` to open a window |
+| `--standalone` says it can't open a window | No desktop session or terminal found. On Linux set `VIBEBREAK_TERMINAL` (e.g. `gnome-terminal`, `kitty`). It falls back to the current terminal when there is one |
+| "already open in another window" | Only one arcade at a time is opened as a window. Switch to it, or `vibebreak --interface terminal` for another one here (handy for testing LAN games) |
+| VS Code terminal looks cramped or keys go to the editor | Click into the terminal panel first; make it at least 80×24 (drag it taller or maximize it), or use `--standalone` |
 | Terminal left in a weird state after a crash | Run `reset` (macOS/Linux). VibeBreak restores the terminal on exit, Ctrl+C, SIGTERM and uncaught errors, so please report it with the seed |
 | Want a clean slate | `vibebreak reset` |
 | Friends can't join your LAN game | Same network? Allow Node.js through the host's firewall on private networks; use the address shown in the lobby. See [docs/LAN.md](docs/LAN.md#connection-troubleshooting) |

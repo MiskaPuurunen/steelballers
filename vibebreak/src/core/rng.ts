@@ -16,6 +16,18 @@ export function hashSeed(seed: string): number {
   return h >>> 0;
 }
 
+/**
+ * Stateless 32-bit hash of two integers. For visual noise that must stay
+ * stable frame to frame (snow texture, weather, scenery) without consuming a
+ * game's Rng, which would change the gameplay a seed produces.
+ */
+export function hash(a: number, b: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d);
+  return (h ^ (h >>> 12)) >>> 0;
+}
+
 /** Create a short human-friendly seed such as "K7Q2-M9XA". */
 export function makeSeed(source: () => number = Math.random): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

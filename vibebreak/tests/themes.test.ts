@@ -131,41 +131,53 @@ describe('theme setting and the THEMES screen', () => {
     const app = new App({ io, store, save: store.load().data, start: { mode: 'menu' }, scheduler: sched });
     void app.run();
     const text = () => app.frame.map(stripAnsi).join('\n');
-    return { app, io, sched, store, text };
+    /** Settings > Theme opens the theme browser. */
+    const openThemes = () => {
+      io.send('8');
+      io.send('\x1b[B'); // Timer
+      io.send('\x1b[B'); // Theme
+      sched.advance(200); // menus ignore a second Enter within 150ms
+      io.send('\r');
+    };
+    return { app, io, sched, store, text, openThemes };
   }
 
   it('old saves get the classic theme with animations on; junk is rejected', () => {
     const base = { version: 1, settings: { color: 'auto' } };
-    expect(normalizeSave(base).settings).toEqual({ color: 'auto', theme: 'classic', animations: true, timing: 'timed' });
+    expect(normalizeSave(base).settings).toEqual({ color: 'auto', theme: 'classic', animations: true, timing: 'timed', interface: 'auto' });
     expect(normalizeSave({ ...base, settings: { theme: '../../etc', animations: 'yes' } }).settings).toMatchObject({ theme: 'classic', animations: true });
     expect(normalizeSave({ ...base, settings: { theme: 'halloween', animations: false } }).settings).toMatchObject({ theme: 'halloween', animations: false });
   });
 
   it('previews live, Esc reverts, Enter saves', () => {
-    const { app, io, store, text } = setup();
-    io.send('5');
+    const { app, io, sched, store, text, openThemes } = setup();
+    openThemes();
     expect(app.stateKind).toBe('themes');
     expect(text()).toContain('Frutiger Aero');
     io.send('\x1b[B'); // Christmas
     expect(activeTheme().id).toBe('christmas');
     expect(text()).toContain('Candy-cane logo');
     io.send('\x1b');
-    expect(app.stateKind).toBe('menu');
+    expect(app.stateKind).toBe('settings');
     expect(activeTheme().id).toBe('classic');
     expect(store.load().data.settings.theme).toBe('classic');
 
-    io.send('5');
+    io.send('\x1b'); // back to the menu
+    openThemes();
     io.send('4'); // Frutiger Aero
+    sched.advance(200);
     io.send('\r');
-    expect(app.stateKind).toBe('menu');
+    expect(app.stateKind).toBe('settings');
+    expect(text()).toContain('Theme set: Frutiger Aero');
     expect(activeTheme().id).toBe('frutiger-aero');
     expect(store.load().data.settings.theme).toBe('frutiger-aero');
+    io.send('\x1b'); // the menu wears the new theme
     expect(text()).toContain('SYNCING TO THE CLOUD');
   });
 
   it('A toggles ambient animation and persists it', () => {
-    const { io, store } = setup();
-    io.send('5');
+    const { io, store, openThemes } = setup();
+    openThemes();
     io.send('a');
     expect(store.load().data.settings.animations).toBe(false);
     io.send('a');

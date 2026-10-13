@@ -6,7 +6,8 @@ import { configDir } from '../storage/save.js';
 
 /**
  * Opt-in auto-launch: when the agent starts working, open VibeBreak in a new
- * terminal pane or window next to it, unless one is already running.
+ * terminal pane or window next to it, unless one is already running. It opens
+ * the main menu: a game never starts just because the agent got busy.
  *
  * The launch is fire-and-forget: the child is spawned detached with no stdio
  * and unref'd, so the hook process exits immediately and the agent is never
@@ -35,16 +36,24 @@ export function cliEntry(): string {
 /**
  * Decide how to open a new terminal running `command` (argv) on this
  * platform. Pure, so every branch is unit-tested. Returns null when no
- * suitable terminal can be found.
+ * suitable terminal can be found (e.g. no graphical desktop).
+ *
+ * `pane` (the agent hook) prefers splitting the current terminal so the game
+ * sits next to the agent; `window` (`--interface standalone`) always asks
+ * for a separate window.
  */
 export function planLaunch(
   command: string[],
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
+  kind: 'pane' | 'window' = 'pane',
 ): LaunchPlan | null {
   const shellLine = command.map(shq).join(' ');
 
   if (platform === 'win32') {
+    if (env.WT_SESSION && kind === 'window') {
+      return { cmd: 'wt.exe', args: ['-w', 'new', '--title', 'VibeBreak', ...command], target: 'new Windows Terminal window' };
+    }
     if (env.WT_SESSION) {
       // Split the current Windows Terminal window, game on the right.
       return {
@@ -62,13 +71,16 @@ export function planLaunch(
     };
   }
 
+  if (env.TMUX && kind === 'window') {
+    return { cmd: 'tmux', args: ['new-window', '-n', 'VibeBreak', shellLine], target: 'new tmux window' };
+  }
   if (env.TMUX) {
     return { cmd: 'tmux', args: ['split-window', '-h', '-l', '45%', shellLine], target: 'tmux split pane' };
   }
 
   if (platform === 'darwin') {
     const script = shellLine.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    if (env.TERM_PROGRAM === 'iTerm.app') {
+    if (env.TERM_PROGRAM === 'iTerm.app' && kind === 'pane') {
       return {
         cmd: 'osascript',
         args: ['-e', `tell application "iTerm2" to tell current session of current window to split vertically with default profile command "${script}"`],
@@ -173,7 +185,9 @@ export function autoLaunch(opts: AutoLaunchOptions = {}): LaunchOutcome {
     /* no previous launch */
   }
 
-  const command = [process.execPath, cliEntry(), 'play', '--from-hook'];
+  // `--interface terminal`: this pane is the arcade (never relaunch from here).
+  // `--duration` sets the round length for games started from the menu.
+  const command = [process.execPath, cliEntry(), '--interface', 'terminal', '--from-hook'];
   if (opts.durationSec) command.push('--duration', String(opts.durationSec));
   if (opts.sessionId && /^[A-Za-z0-9_-]+$/.test(opts.sessionId)) command.push('--agent-session', opts.sessionId);
   const plan = planLaunch(command, opts.env ?? process.env, opts.platform ?? process.platform);

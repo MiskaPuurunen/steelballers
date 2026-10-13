@@ -117,7 +117,6 @@ export const ROCKS = {
     compactAnchor: { x: 2, y: 1 },
   }),
 };
-export type RockVariant = keyof typeof ROCKS;
 
 export const SNOWMAN = defineSprite('snowman', {
   frames: [

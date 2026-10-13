@@ -27,8 +27,8 @@ function setup(opts: { cols?: number; rows?: number; loadRuntime?: () => Promise
 describe('Custom games screen', () => {
   it('menu -> custom -> example -> save -> play a round -> no XP, best kept', async () => {
     const { app, io, sched, store, customDir, text } = setup();
-    expect(text()).toContain('[6] CUSTOM GAMES');
-    io.send('6');
+    expect(text()).toContain('[5] CUSTOM GAMES');
+    io.send('5');
     expect(app.stateKind).toBe('custom');
     await app.customReady;
     expect(text()).toContain('No custom games yet');
@@ -62,7 +62,7 @@ describe('Custom games screen', () => {
 
   it('pasting code (bracketed paste) adds a game; errors jump to the line', async () => {
     const { app, io, text } = setup();
-    io.send('6');
+    io.send('5');
     await app.customReady;
     io.send('p');
     io.send(PASTE('game = { id = "mini", name = "Mini", min_size = { w = 20, h = 3 } }\nfunction update()\n  local t = nil\n  t.x = 1\nend\n'));
@@ -85,7 +85,7 @@ describe('Custom games screen', () => {
     const { app, io, sched, dir, customDir, text } = setup();
     const src = path.join(dir, 'my game.lua');
     fs.writeFileSync(src, TEMPLATE_LUA.replace('"packet-catcher"', '"from-file"').replace('"Packet Catcher"', '"From File"'));
-    io.send('6');
+    io.send('5');
     await app.customReady;
     io.send('f');
     expect(app.stateKind).toBe('custom-file');
@@ -101,7 +101,7 @@ describe('Custom games screen', () => {
     const { app, io, sched, dir, text } = setup();
     const src = path.join(dir, 'bad.lua');
     fs.writeFileSync(src, 'game = {\n  id = "bad",\n  name = = "x"\n}');
-    io.send('6');
+    io.send('5');
     await app.customReady;
     io.send('f');
     io.send(PASTE(src));
@@ -119,7 +119,7 @@ describe('Custom games screen', () => {
     fs.mkdirSync(customDir, { recursive: true });
     fs.writeFileSync(path.join(customDir, 'a.lua'), TEMPLATE_LUA);
     fs.writeFileSync(path.join(customDir, 'b.lua'), 'this is not lua');
-    io.send('6');
+    io.send('5');
     await app.customReady;
     expect(text()).toContain('Packet Catcher');
     expect(text()).toMatch(/b\.lua: game:1:/);
@@ -129,7 +129,7 @@ describe('Custom games screen', () => {
     const { app, io, customDir, text } = setup();
     fs.mkdirSync(customDir, { recursive: true });
     fs.writeFileSync(path.join(customDir, 'packet-catcher.lua'), TEMPLATE_LUA);
-    io.send('6');
+    io.send('5');
     await app.customReady;
     io.send('x');
     expect(text()).toContain('Press X again');
@@ -140,7 +140,7 @@ describe('Custom games screen', () => {
 
   it('works without the Lua runtime: explains instead of crashing', async () => {
     const { app, io, text } = setup({ loadRuntime: () => Promise.reject(new Error('The Lua runtime is not installed. Run: npm install wasmoon')) });
-    io.send('6');
+    io.send('5');
     await app.customReady;
     expect(text()).toContain('npm install wasmoon');
     io.send('p');
@@ -149,14 +149,14 @@ describe('Custom games screen', () => {
 
   it('pasting outside a text field still works as typed keys', () => {
     const { app, io } = setup();
-    io.send(PASTE('4'));
+    io.send(PASTE('6'));
     expect(app.stateKind).toBe('stats');
   });
 
   it('fits 80x24', async () => {
     const { app, io, text } = setup({ cols: 80, rows: 24 });
     expect(text()).toContain('[Q] quit');
-    io.send('6');
+    io.send('5');
     await app.customReady;
     expect(text()).toContain('[Esc] back');
     io.send('n');

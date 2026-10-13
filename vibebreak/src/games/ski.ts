@@ -1,6 +1,6 @@
 import { BaseGame } from '../core/base-game.js';
 import type { GameContext, GameDefinition, HudItem, Key } from '../core/types.js';
-import type { Rng } from '../core/rng.js';
+import { hash, type Rng } from '../core/rng.js';
 import { c, theme } from '../ui/style.js';
 import { Canvas, type Clip } from '../ui/canvas.js';
 import { glyphSpan, hitCells, type Sprite } from '../ui/sprite.js';
@@ -327,14 +327,6 @@ interface Fx {
   ageMs: number;
   lifeMs: number;
   frameMs: number;
-}
-
-/** Deterministic 32-bit hash for visual noise (never touches the game rng). */
-function hash(a: number, b: number): number {
-  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
-  h ^= h >>> 15;
-  h = Math.imul(h, 0x2c1b3c6d);
-  return (h ^ (h >>> 12)) >>> 0;
 }
 
 export class SkiSurvival extends BaseGame {

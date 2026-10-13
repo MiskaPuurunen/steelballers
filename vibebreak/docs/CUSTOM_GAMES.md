@@ -2,7 +2,7 @@
 
 You can write your own VibeBreak minigame as a single Lua 5.4 script and play it from the arcade. It gets the same treatment as the built-in games: the briefing screen, seeds, difficulty, modifiers, pause, the HUD and the results screen.
 
-Open **[6] CUSTOM GAMES** in the main menu, then:
+Open **[5] CUSTOM GAMES** in the main menu, then:
 
 | Key | Action |
 |---|---|
@@ -17,7 +17,7 @@ Every script you add is checked first. VibeBreak loads it, runs `init()` and pla
 
 Custom games never give XP, never unlock achievements and are never picked by Quick Play or the daily challenge. Your best score per custom game is kept.
 
-Custom games are single-player. LAN multiplayer ([H] / [J] / [P] in the menu, see [LAN.md](LAN.md)) uses its own built-in games; a Lua script can't be played over the network.
+Custom games are single-player. LAN multiplayer (**[4] MULTIPLAYER** in the menu, see [LAN.md](LAN.md)) uses its own built-in games; a Lua script can't be played over the network.
 
 ## The smallest game
 
