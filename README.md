@@ -1,49 +1,25 @@
-Actual readme under this: Here just dev notes and other shi
-- Custom games via LUA for example
-- Server support for leaderboards
-- other minigames
-  - Gambling game
-  - tetris?
-  - 
-- 
-
-
-Tests:
-- Works in windows terminal
-- Works in claude code
-- 
-
-
-
-
-
 # Steelballers
 
-> A tiny ASCII art game that lives in your terminal. Play it while your AI is thinking or tests are testing.
+> ASCII art game that lives in your terminal. Play it while your AI is thinking or tests are testing.
 
 ```
-  ____________________________________
- |  SCORE: 0909          LIVES: ♥ ♥ ♥ |
- |                                    |
- |        *        @          *       |
- |    #####               #####       |
- |              >o<                   |
- |____________________________________|
+<img width="596" height="469" alt="image" src="https://github.com/user-attachments/assets/8b516e85-12c0-4126-b971-0235b0ead2c8" />
+
 ```
 
 Built for B.A.L.L.S in TypeScript.
 
 ## Why
 
-Waiting for an AI agent to finish is dead time. GAMENAMEGAMENAME turns it into a quick round of something fun and is an alternative for taking out a phone, right next to your work. No browser, no alt-tab, no context switch.
+Now you have a fun way to spend time while being able to do it straight in the terminal rather than on a phone for example. You can experience the fun with friends while doing projects or waiting for the professor to come back from a break.
 
 ## Features
 
-- Pure ASCII rendering, runs in any modern terminal
+- ASCII rendering
 - Built for Windows Terminal
 - Short rounds, easy to drop and pick back up
 - Zero setup beyond Node.js
-- Leaderboard
+- Custom made community games
 
   
 ## Requirements
@@ -67,43 +43,37 @@ Dev mode with live reload:
 npm run dev
 ```
 
-## Controls
-
-| Key            | Action        |
-| -------------- | ------------- |
-| `←` `→` / `A` `D` | Move       |
-| `Space`        | Action / jump |
-| `P`            | Pause         |
-| `Q` / `Ctrl+C` | Quit          |
-
-## Play alongside Claude Code
-
-In Windows Terminal, split the pane so the game sits next to your agent:
-
-1. Start Claude Code in one pane
-2. Press `Alt+Shift+D` (or `Alt+Shift+-` / `Alt+Shift++`) to split
-3. Run `npm start` in the new pane
-4. Glance over when Claude is done 👀
-
 ## Project Structure
 
 ```
-src/
-├── index.ts      # entry point, game loop
-├── renderer.ts   # draws ASCII frames to the terminal
-├── input.ts      # raw keyboard input handling
-├── game/         # game state, entities, logic
-└── assets/       # ASCII sprites
+steelballers/
+├── site/                  # static website
+└── vibebreak/
+    ├── src/
+    │   ├── cli/           # entry point, argument parsing, doctor, Claude Code hook
+    │   ├── core/          # game base class, RNG, sessions, modifiers, XP and achievements
+    │   ├── games/         # the 9 arcade games
+    │   │   └── multiplayer/   # Battleship, Prompt Panic, Doodle Protocol
+    │   ├── custom/        # custom Lua games: sandboxed runtime, loader, library
+    │   ├── net/           # LAN: TCP server/client, UDP room discovery, lobby, protocol
+    │   ├── mp/            # multiplayer game registry, bots, headless play
+    │   ├── integrations/  # Claude Code agent status and auto-launch
+    │   ├── storage/       # local save file
+    │   └── ui/            # app screens, rendering, input, themes, text editor
+    │       └── lan/       # multiplayer screens
+    ├── tests/             # vitest
+    ├── scripts/           # PTY smoke test, LAN demo
+    └── docs/              # architecture, LAN guide, custom games API
 ```
 
 ## Tech Stack
 
-- TypeScript
-- Node.js (`process.stdin` raw mode + ANSI escape codes)
-
-## Team
-
-- **WhiteBeard** - [@your-github](https://github.com/your-github)
+- TypeScript, Node.js 18+
+- Terminal rendering with ANSI escape codes and `process.stdin` raw mode, with no UI libraries
+- LAN multiplayer over TCP (`node:net`), with room discovery over UDP (`node:dgram`)
+- Custom games in Lua 5.4 through [wasmoon](https://github.com/ceifa/wasmoon) (WebAssembly, optional dependency)
+- Vitest for tests, tsx for dev mode
+- Website: plain HTML, CSS and JS, deployed with GitHub Pages
 
 ## License
 
