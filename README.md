@@ -2,11 +2,6 @@
 
 > ASCII art game that lives in your terminal. Play it while your AI is thinking or tests are testing.
 
-```
-<img width="596" height="469" alt="image" src="https://github.com/user-attachments/assets/8b516e85-12c0-4126-b971-0235b0ead2c8" />
-
-```
-
 Built for B.A.L.L.S in TypeScript.
 
 ## Why
