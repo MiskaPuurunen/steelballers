@@ -1,12 +1,4 @@
-/**
- * Deterministic, seedable pseudo-random number generator.
- *
- * Every source of randomness in C-Cade goes through an Rng so a run can be
- * reproduced exactly from its seed (useful for debugging, tests and the daily
- * challenge). Uses mulberry32, which is tiny, fast and good enough for games.
- */
 
-/** Hash an arbitrary string seed into a 32-bit unsigned integer (FNV-1a). */
 export function hashSeed(seed: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < seed.length; i++) {
@@ -16,11 +8,7 @@ export function hashSeed(seed: string): number {
   return h >>> 0;
 }
 
-/**
- * Stateless 32-bit hash of two integers. For visual noise that must stay
- * stable frame to frame (snow texture, weather, scenery) without consuming a
- * game's Rng, which would change the gameplay a seed produces.
- */
+
 export function hash(a: number, b: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
   h ^= h >>> 15;

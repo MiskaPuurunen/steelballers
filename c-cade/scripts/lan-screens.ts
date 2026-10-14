@@ -1,10 +1,4 @@
-/**
- * Render the LAN screens to plain text (docs/screens/lan-*.txt) by driving
- * real App instances over a loopback LAN game. Doubles as a visual check
- * at a given terminal size.
- *
- * Usage: npx tsx scripts/lan-screens.ts [cols] [rows] [outDir]
- */
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

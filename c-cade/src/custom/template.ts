@@ -1,7 +1,4 @@
-/**
- * Starter game offered by "New from template" in the Custom Games screen.
- * It doubles as a working reference for the whole Lua API.
- */
+
 export const TEMPLATE_LUA = `-- Packet Catcher: an example C-Cade game.
 -- The comments below cover the whole Lua API.
 

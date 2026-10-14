@@ -2,11 +2,6 @@ import { BaseGame } from '../core/base-game.js';
 import type { GameContext, GameDefinition, HudItem, Key } from '../core/types.js';
 import { c, theme } from '../ui/style.js';
 
-/**
- * BLACKJACK — beat the dealer to 21. Play chips only.
- * Fixed bet per hand; the round ends when you can't cover the bet.
- */
-
 const START_CHIPS = 100;
 const BET = 10;
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -14,7 +9,6 @@ const SUITS = ['♠', '♥', '♦', '♣'];
 
 export interface Card { rank: string; suit: string }
 
-/** Best total for a hand: aces count 11 unless that would bust. */
 export function handValue(hand: readonly Card[]): number {
   let total = 0;
   let aces = 0;

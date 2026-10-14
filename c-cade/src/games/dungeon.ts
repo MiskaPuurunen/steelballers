@@ -18,15 +18,7 @@ import * as view from './dungeon/render.js';
 export { MAP_H, MAP_W, FLOORS, bfsDistances, generateDungeon } from './dungeon/map.js';
 export type { Dungeon, Item, ItemKind, MapEnemy, Pos } from './dungeon/map.js';
 
-/**
- * DEPENDENCY DUNGEON — a compact roguelite.
- * Pick a class, explore four floors, install every dependency (&) to open
- * each gate (>), fight telegraphed turn-based battles, loot, level up, and
- * beat The Legacy Monolith on the last gate.
- *
- * Rules live in ./dungeon/*.ts (no terminal code); this class turns keys
- * into rule calls and owns the run's state; ./dungeon/render.ts draws it.
- */
+
 
 const VIEW_RADIUS = 5.5;
 

@@ -7,12 +7,6 @@ import type { RaceNetView } from '../games/racing/mp.js';
 import { Track } from '../games/racing/track.js';
 import { netDriver } from '../games/racing/ai.js';
 
-/**
- * A simple automated player that speaks the real protocol through a
- * LanClient. Used to fill a lobby ("c-cade join <host> --bot"), for the
- * multi-process smoke tests, and for demos. It only ever sends the same
- * actions a human client would; the server validates them identically.
- */
 
 const ANSWERS = [
   'A blockchain, but for snacks.',

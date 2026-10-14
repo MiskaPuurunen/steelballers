@@ -1,16 +1,4 @@
-#!/usr/bin/env node
-/**
- * LAN multiplayer demo: a dedicated host plus bot players, all as separate
- * processes talking over TCP on this machine. Plays one Battleship match
- * (2 players) and one Prompt Panic game (3 players), streaming every log.
- *
- * Usage: npm run build && node scripts/lan-demo.mjs [--port 17777] [--fast]
- *
- * To play yourself instead of watching bots, open three terminals:
- *   1) c-cade host --game battleship --local
- *   2) c-cade join 127.0.0.1
- *   (on other computers: c-cade join <address shown in the lobby>)
- */
+
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

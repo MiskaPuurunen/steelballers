@@ -1,7 +1,3 @@
-/**
- * The interface choices (see src/cli/interface.ts for how each one runs).
- * Kept dependency-free so settings, the CLI parser and the menu can share it.
- */
 
 export type InterfaceMode = 'terminal' | 'standalone' | 'auto';
 

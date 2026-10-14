@@ -4,11 +4,6 @@ import path from 'node:path';
 import { configDir } from '../storage/save.js';
 import { MAX_SOURCE_BYTES } from './lua-game.js';
 
-/**
- * Custom games live as plain .lua files in <config dir>/games/, next to the
- * save file. Loading a file or pasting code stores a copy there, so the game
- * is still in the list next time. Players can also drop files in directly.
- */
 
 export function gamesDir(dir = configDir()): string {
   return path.join(dir, 'games');

@@ -5,12 +5,7 @@ import type { GameContext, GameDefinition, GameInstance, HudItem, Key, Tone } fr
 import { c, theme } from '../ui/style.js';
 import type { LuaRuntime, LuaVm } from './lua-runtime.js';
 
-/**
- * Adapter that turns a user's Lua script into a normal GameDefinition, so the
- * shell (briefing, pause, modifiers, seeds, results) treats it like any other
- * minigame. Anything coming out of the script is validated, clamped and
- * stripped of control characters before it reaches the terminal.
- */
+
 
 export const MAX_SOURCE_BYTES = 128 * 1024;
 /** Largest game area that still fits an 80x24 terminal with the HUD. */

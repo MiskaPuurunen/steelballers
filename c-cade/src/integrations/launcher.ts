@@ -4,15 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { configDir, envSetting } from '../storage/save.js';
 
-/**
- * Opt-in auto-launch: when the agent starts working, open C-Cade in a new
- * terminal pane or window next to it, unless one is already running. It opens
- * the main menu: a game never starts just because the agent got busy.
- *
- * The launch is fire-and-forget: the child is spawned detached with no stdio
- * and unref'd, so the hook process exits immediately and the agent is never
- * blocked or touched.
- */
+
 
 export interface LaunchPlan {
   cmd: string;

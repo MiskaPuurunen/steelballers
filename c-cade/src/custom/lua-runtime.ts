@@ -1,21 +1,4 @@
-/**
- * Sandboxed Lua runtime for user-made games.
- *
- * Lua runs inside WebAssembly (wasmoon, Lua 5.4). The WASM module is loaded
- * lazily the first time someone opens Custom Games, so the built-in arcade
- * never pays for it and still works when the optional dependency is missing.
- *
- * Safety model (the script is untrusted):
- * - User code runs in its own environment table with a whitelist of safe
- *   functions. No io, os, require, load, debug, package or collectgarbage.
- *   Only text chunks are accepted (bytecode is a known sandbox escape).
- * - CPU: an instruction-count hook aborts any single call that runs too long.
- *   pcall/xpcall and coroutines are wrapped so a script cannot swallow the
- *   abort or escape the hook by running in a new coroutine.
- * - Memory: each engine has a hard allocation cap.
- * - Randomness only comes from the host's seeded Rng, so runs stay replayable.
- * - Everything that crosses the boundary is a plain string or number.
- */
+
 
 const STEP_INSTRUCTIONS = 1000;
 /** Budget for one update/key/render call (about 5-10 ms of Lua). */

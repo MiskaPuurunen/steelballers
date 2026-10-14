@@ -2,28 +2,7 @@ import { spawn } from 'node:child_process';
 import { arcadeRunning, cliEntry, planLaunch, type LaunchPlan } from '../integrations/launcher.js';
 import { describeTerminal, type InterfaceMode } from '../core/interfaces.js';
 
-/**
- * Where the interactive arcade runs. There is one application (the App in
- * src/ui/app.ts) and one terminal driver (NodeTerminal); an interface only
- * decides which terminal the process draws in:
- *
- *  - terminal:   right here, in the current terminal (VS Code's integrated
- *                terminal, Windows Terminal, iTerm, tmux...). The default.
- *  - standalone: in a new terminal window. This process opens the window,
- *                prints where it went and exits; the window runs the same
- *                CLI with `--interface terminal`, so it shares the save file,
- *                settings, LAN code and agent status with every other run.
- *  - auto:       the current terminal. Without one (a pipe, a script, CI)
- *                it does NOT open a window by itself: it explains how to
- *                ask for one. Only an explicit choice ever spawns a window.
- *
- * Recursion guard: the launched window always gets `--interface terminal`
- * on its command line. Environment variables are set too, but they are not
- * relied on (Windows Terminal starts new windows from its own process, so
- * they don't propagate).
- */
 
-/** Set in the environment of a window we opened (informational; see the recursion guard above). */
 export const CHILD_ENV = 'C_CADE_LAUNCHED';
 
 interface InterfaceContext {

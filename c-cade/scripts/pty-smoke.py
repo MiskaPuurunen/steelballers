@@ -1,12 +1,4 @@
-#!/usr/bin/env python3
-"""
-Real-terminal smoke test: runs C-Cade inside a pseudo-terminal, sends
-keystrokes, renders the output with a VT100 emulator (pyte) and checks what
-is on screen. Also verifies the terminal is restored on exit.
 
-Usage: python3 scripts/pty-smoke.py [--dump DIR]
-Requires: pip install pyte ; npm run build
-"""
 import os, pty, select, sys, time, signal, tempfile, json
 
 import pyte

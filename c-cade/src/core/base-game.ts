@@ -4,14 +4,7 @@ import type {
 import type { Rng } from './rng.js';
 import { difficultyLevel } from './modifiers.js';
 
-/**
- * Shared plumbing for minigames: round clock, scoring with modifier
- * multipliers, feedback messages and end-of-round handling.
- *
- * Games never create their own timers or key listeners: the arcade shell
- * calls update(dt) from a single loop and handleInput(key) from a single
- * input handler, which makes cleanup trivial and logic testable.
- */
+
 export abstract class BaseGame implements GameInstance {
   abstract readonly minSize: { width: number; height: number };
 

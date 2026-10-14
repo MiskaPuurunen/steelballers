@@ -1,27 +1,5 @@
 import { envSetting } from '../storage/save.js';
-/**
- * Agent status model: a pure, typed state machine fed by agent lifecycle
- * events (Claude Code hooks), plus the rules that turn a stored session
- * record into what the HUD shows at a given moment.
- *
- * No I/O here, so every transition is unit-tested with fake clocks.
- *
- * What the statuses mean (and what they don't):
- *  - THINKING  the agent is processing a turn and no tool is running right
- *              now. Hooks can't tell "reasoning" from "writing a reply", so
- *              both show as THINKING.
- *  - WORKING   at least one tool call has started (PreToolUse) and not yet
- *              finished (PostToolUse / PostToolUseFailure).
- *  - WAITING_FOR_INPUT  a permission prompt, a question for you, or Claude
- *              finished and is idle waiting for your next prompt.
- *  - COMPLETED the turn ended (Stop).
- *  - ERROR     the turn ended because of an API error (StopFailure).
- *  - IDLE      no active task: session just started, ended, was
- *              interrupted, or finished long ago.
- *  - UNKNOWN   we lost visibility: a turn was active but no event has
- *              arrived for a long time (e.g. Esc interrupt, which fires no
- *              hook, or a crashed agent). Never shown as COMPLETED.
- */
+
 
 export type AiStatus =
   | 'IDLE' | 'THINKING' | 'WORKING' | 'WAITING_FOR_INPUT' | 'COMPLETED' | 'ERROR' | 'UNKNOWN';
@@ -118,11 +96,6 @@ export function safeSessionId(id: string): string {
   return clean || 'unknown';
 }
 
-/**
- * Normalise a raw hook payload. Unknown events are accepted (they still
- * count as activity); missing optional fields are fine. Only a missing
- * hook_event_name is an error.
- */
 export function parseHookPayload(raw: unknown, at: number, agent = 'claude-code'): { event: AgentEvent } | { error: string } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'payload is not a JSON object' };
   const p = raw as Record<string, unknown>;

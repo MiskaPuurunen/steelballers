@@ -6,19 +6,6 @@ import {
   type AgentEvent, type AiStatus, type SessionRecord, type StatusView, type Timeouts,
 } from './agent-model.js';
 
-/**
- * Agent status beacon: transport and consumers.
- *
- *   Claude Code ──hook (async, exit 0, no stdout)──▶ c-cade hook
- *       ──locked read-modify-write──▶ agent/sessions/<session_id>.json
- *   C-Cade (any terminal) ──AgentMonitor.poll() every 500ms──▶ HUD
- *
- * One file per agent session, so sessions can't overwrite each other. A
- * short lock file serialises the hooks of one session (they run as parallel
- * processes), every write is tmp-file + rename, and the state machine in
- * agent-model.ts orders events by their own timestamps. C-Cade never
- * talks to the agent, never reads its stdin/stdout and never blocks it.
- */
 
 export const HOOK_VERSION = 2;
 

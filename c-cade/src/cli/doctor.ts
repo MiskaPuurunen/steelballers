@@ -2,11 +2,7 @@ import { AgentMonitor, agentDir, debugEnabled, debugLogPath, readHealth, HOOK_VE
 import { inspectInstall, claudeSettingsPath, type InstallReport } from '../integrations/claude-settings.js';
 import { theme, c } from '../ui/style.js';
 
-/**
- * `c-cade doctor`: answers "why is the AI status wrong?" by separating
- * three questions: is the integration configured, are events arriving, and
- * what does C-Cade currently believe (and how sure is it)?
- */
+
 
 interface DoctorReport {
   install: InstallReport;

@@ -1,15 +1,7 @@
 import type { GameDefinition, GameResult, SessionConfig } from './types.js';
 import { MAX_GHOST, type SaveData } from '../storage/save.js';
 
-/**
- * XP, levels, achievements and stat aggregation. Pure functions over
- * SaveData so they are trivial to test.
- *
- * Design rule: progression rewards skill and variety, never grinding or
- * streak-keeping. Nothing decays, nothing is lost by stopping.
- */
 
-/** Total XP needed to reach `level` (level 1 = 0 XP; each level costs 100 more than the last). */
 export function xpForLevel(level: number): number {
   return 50 * level * (level - 1);
 }

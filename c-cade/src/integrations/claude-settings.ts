@@ -3,13 +3,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { HOOK_EVENTS } from './agent-status.js';
 
-/**
- * Add or remove C-Cade's hooks in Claude Code's user settings file
- * (~/.claude/settings.json). Only runs when the user explicitly asks
- * (`hook install --write` / `hook uninstall --write`). Other settings and
- * other hooks are preserved, and a backup is written first.
- */
-
 
 interface Handler { type?: string; command?: string; [k: string]: unknown }
 interface Group { matcher?: string; hooks?: Handler[]; [k: string]: unknown }

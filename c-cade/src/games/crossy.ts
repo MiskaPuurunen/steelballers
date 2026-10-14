@@ -3,12 +3,6 @@ import type { GameContext, GameDefinition, HudItem, Key } from '../core/types.js
 import type { Rng } from '../core/rng.js';
 import { c, theme } from '../ui/style.js';
 
-/**
- * CROSSY PROD — an endless Crossy Road-style hopper.
- * Ship your hotfix forward across lanes of CI traffic, data-lake rivers
- * (ride the logs) and release trains. Stall too long and a code reviewer
- * swoops in.
- */
 
 export const LANE_W = 20;
 const VIEW_H = 14;

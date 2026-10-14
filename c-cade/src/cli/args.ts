@@ -1,6 +1,4 @@
-/**
- * Tiny dependency-free argument parser. Pure, so it is fully unit-tested.
- */
+
 
 import { isInterfaceMode, type InterfaceMode } from '../core/interfaces.js';
 
@@ -9,10 +7,7 @@ type Command = 'menu' | 'play' | 'daily' | 'list' | 'stats' | 'reset' | 'hook' |
 export interface ParsedArgs {
   command: Command;
   game?: string;
-  /**
-   * A timer flag from older versions (--duration, --timer, --timed, --mode sprint).
-   * Rounds have no clock any more, so these are accepted and ignored with a notice.
-   */
+
   legacyTimer: boolean;
   seed?: string;
   difficulty?: 'easy' | 'normal' | 'hard';
