@@ -3,45 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>C-Cade disk shop</title>
-  <meta name="description" content="Custom games and themes for C-Cade, the terminal arcade you play while your AI is thinking.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💾</text></svg>">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Permanent+Marker&display=swap" rel="stylesheet">
+  <title>C-Cade games</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="#/games">
-      <span class="brand-name">C-Cade</span>
-      <span class="brand-sub">disk shop</span>
-    </a>
-    <nav class="tabs" aria-label="Sections">
-      <a href="#/games" data-tab="games">Games</a>
-      <a href="#/themes" data-tab="themes">Themes</a>
+  <header>
+    <b>C-Cade</b>
+    <nav>
+      <button data-tab="games">Games</button>
+      <button data-tab="themes">Themes</button>
     </nav>
   </header>
 
-  <main>
-    <section id="games" class="shelf" hidden>
-      <p class="intro">Games made in Lua by players. Open one to read the code, then copy it or download the file.</p>
-      <div class="grid" id="game-grid"></div>
-    </section>
+  <main id="list"></main>
 
-    <section id="themes" class="shelf" hidden>
-      <p class="intro">Every theme recolours the whole arcade. Open one to get the command that switches to it.</p>
-      <div class="grid" id="theme-grid"></div>
-    </section>
-
-    <p class="load-error" id="load-error" hidden></p>
-  </main>
-
-  <dialog id="detail" aria-labelledby="detail-title">
-    <div class="detail-inner" id="detail-body"></div>
+  <dialog id="detail">
+    <button id="close">Close</button>
+    <h2 id="d-title"></h2>
+    <p id="d-text"></p>
+    <p><b id="d-price"></b></p>
+    <p>
+      <button id="copy">Copy</button>
+      <button id="download">Download</button>
+    </p>
+    <pre id="d-code"></pre>
   </dialog>
-
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>
