@@ -3,7 +3,7 @@
  * It doubles as a working reference for the whole Lua API.
  */
 export const TEMPLATE_LUA = `-- Packet Catcher: an example C-Cade game.
--- Full API reference: docs/CUSTOM_GAMES.md
+-- The comments below cover the whole Lua API.
 
 game = {
   id = "packet-catcher",            -- lowercase letters, digits, dashes

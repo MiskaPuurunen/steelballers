@@ -57,16 +57,13 @@ const roundStat = (ctx: AchievementCtx, game: string, stat: string) =>
 
 export const ACHIEVEMENTS: readonly Achievement[] = [
   { id: 'first-blood', name: 'First Blood', description: 'Score your first point.', check: (c) => (c.result?.score ?? 0) > 0 },
-  { id: 'bug-hunter', name: 'Bug Hunter', description: 'Squash 50 bugs in Bug Bash (all time).', check: (c) => total(c.save, 'bugbash', 'bugsSquashed') >= 50 },
   { id: 'perfect-run', name: 'Perfect Run', description: 'Complete a flawless round.', check: (c) => !!c.result?.perfect },
   { id: 'variety-pack', name: 'Variety Pack', description: 'Play every minigame.', check: (c) => c.gameIds.every((id) => (c.save.gameStats[id]?.plays ?? 0) > 0) },
   { id: 'terminal-veteran', name: 'Terminal Veteran', description: 'Reach level 10.', check: (c) => levelFromXp(c.save.xp) >= 10 },
-  { id: 'combo-breaker', name: 'C-C-Combo', description: 'Reach a 20-hit combo in Bug Bash.', check: (c) => roundStat(c, 'bugbash', 'maxCombo') >= 20 },
   { id: 'snake-charmer', name: 'Snake Charmer', description: 'Grow the snake to length 20.', check: (c) => roundStat(c, 'snake', 'maxLength') >= 20 },
-  // Code Sprint's "Touch Typist" was retired with the game; old unlocks stay in the save file.
+  // Achievements of retired games (Code Sprint, Bug Bash, Stack Overflow) are gone; old unlocks stay in the save file.
   { id: 'black-diamond', name: 'Black Diamond', description: 'Ski 1,000m in one Ski Survival run.', check: (c) => roundStat(c, 'ski', 'distance') >= 1000 },
   { id: 'big-air', name: 'Big Air', description: 'Land 3 tricks in one Ski Survival run.', check: (c) => roundStat(c, 'ski', 'tricks') >= 3 },
-  { id: 'skyscraper', name: 'Skyscraper', description: 'Stack a tower 25 blocks high.', check: (c) => roundStat(c, 'stack', 'height') >= 25 },
   { id: 'published', name: 'npm publish', description: 'Escape the Dependency Dungeon.', check: (c) => roundStat(c, 'dungeon', 'escaped') >= 1 },
   { id: 'exception-handled', name: 'Exception Handled', description: 'Win your first Dependency Dungeon fight.', check: (c) => total(c.save, 'dungeon', 'combatWins') >= 1 },
   { id: 'untouchable', name: 'Untouchable', description: 'Win a Dependency Dungeon fight without taking damage.', check: (c) => roundStat(c, 'dungeon', 'flawlessWins') >= 1 },

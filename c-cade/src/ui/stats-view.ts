@@ -98,10 +98,8 @@ function stylePrefix(original: string, text: string): string {
 function gameHighlight(id: string, bests: Record<string, number>, totals: Record<string, number>): string {
   const b = (k: string) => fmt(bests[k] ?? 0);
   switch (id) {
-    case 'bugbash': return theme.muted(`best combo ${b('maxCombo')}`);
     case 'snake': return theme.muted(`longest snake ${b('maxLength')}`);
     case 'ski': return theme.muted(`farthest ${b('distance')}m`);
-    case 'stack': return theme.muted(`tallest tower ${b('height')}`);
     case 'dungeon': return theme.muted(`escapes ${fmt(totals.escaped ?? 0)}`);
     case 'tetris': return theme.muted(`most lines ${b('lines')}`);
     case 'crossy': return theme.muted(`farthest ${b('distance')} lanes`);

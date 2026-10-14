@@ -21,6 +21,11 @@ Now you have a fun way to spend time while being able to do it straight in the t
 - Zero setup beyond Node.js
 - Custom made community games
 
+## Games
+
+The Arcade opens with two quick ones: **Blackjack** (hit or stand against a dealer who draws to 17) and **Slots** (three reels, three of a kind pays). Both use play chips only, with no real money. After those come Terminal Snake, Ski Survival, Dependency Dungeon, Crossy Prod, Tetris, and Racing (Grand Prix, Time Trial and Highway). Over LAN you can also play Battleship, Prompt Panic, Doodle Protocol and Racing.
+
+Start a specific game with `c-cade play --game <id>`, for example `--game blackjack` (or `bj`) and `--game slots`.
   
 ## Requirements
 
@@ -30,17 +35,22 @@ Now you have a fun way to spend time while being able to do it straight in the t
 ## Install & Run
 
 ```bash
-git clone https://github.com/<your-username>/waitquest.git
-cd waitquest
+git clone https://github.com/MiskaPuurunen/steelballers.git
+cd steelballers/c-cade
 npm install
 npm run build
-npm start
+npm link        # puts the `c-cade` command on your PATH
+c-cade play
 ```
 
-Dev mode with live reload:
+`npm link` is optional. Without it, run the game from the `c-cade` folder with `npm start -- play` (or `node dist/cli/index.js play`). To remove the global command later: `npm unlink -g c-cade`.
+
+If `c-cade` isn't recognized after linking, open a new terminal and check that the folder printed by `npm prefix -g` is on your PATH.
+
+Dev mode (runs the TypeScript source directly, no build step):
 
 ```bash
-npm run dev
+npm run dev -- play
 ```
 
 ## Project Structure
@@ -48,11 +58,11 @@ npm run dev
 ```
 steelballers/
 ├── site/                  # static website
-└── vibebreak/
+└── c-cade/
     ├── src/
     │   ├── cli/           # entry point, argument parsing, doctor, Claude Code hook
     │   ├── core/          # game base class, RNG, sessions, modifiers, XP and achievements
-    │   ├── games/         # the 9 arcade games
+    │   ├── games/         # the arcade games
     │   │   └── multiplayer/   # Battleship, Prompt Panic, Doodle Protocol
     │   ├── custom/        # custom Lua games: sandboxed runtime, loader, library
     │   ├── net/           # LAN: TCP server/client, UDP room discovery, lobby, protocol
@@ -61,9 +71,7 @@ steelballers/
     │   ├── storage/       # local save file
     │   └── ui/            # app screens, rendering, input, themes, text editor
     │       └── lan/       # multiplayer screens
-    ├── tests/             # vitest
-    ├── scripts/           # PTY smoke test, LAN demo
-    └── docs/              # architecture, LAN guide, custom games API
+    └── scripts/           # PTY smoke test, LAN demo
 ```
 
 ## Tech Stack
@@ -72,7 +80,7 @@ steelballers/
 - Terminal rendering with ANSI escape codes and `process.stdin` raw mode, with no UI libraries
 - LAN multiplayer over TCP (`node:net`), with room discovery over UDP (`node:dgram`)
 - Custom games in Lua 5.4 through [wasmoon](https://github.com/ceifa/wasmoon) (WebAssembly, optional dependency)
-- Vitest for tests, tsx for dev mode
+- tsx for dev mode
 - Website: plain HTML, CSS and JS, deployed with GitHub Pages
 
 ## License

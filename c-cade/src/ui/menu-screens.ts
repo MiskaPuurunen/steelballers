@@ -183,7 +183,6 @@ export function helpLines(d: HelpData, width: number): string[] {
   row('Commands', 'c-cade play --game <id> | daily | list | stats | host | join <ip> | doctor | --help');
   row('Interface', `Running in ${describeTerminal(d.env)}. Settings > Interface picks where "c-cade" opens; --interface terminal|standalone|auto overrides it once.`);
   row('Save file', d.saveFile);
-  row('Docs', 'README.md, docs/LAN.md, docs/CUSTOM_GAMES.md, docs/ARCHITECTURE.md');
   L.push('');
   L.push(keyHint([['Esc', 'back']]));
   return L;

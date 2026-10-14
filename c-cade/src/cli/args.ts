@@ -246,7 +246,7 @@ LAN multiplayer (same network, no internet or accounts needed):
   In the menu: [4] MULTIPLAYER (shortcuts H host, J join, P party).
 
 Options:
-  -g, --game <id>        bugbash | snake | ski | stack | dungeon | crossy | tetris |
+  -g, --game <id>        blackjack | slots | snake | ski | dungeon | crossy | tetris |
                          racing | timetrial | highway
   -s, --seed <seed>      Reproduce a session (game, modifier, layout, sequence)
   -m, --modifier <id>    standard | overclocked | bug-bounty | low-battery |
