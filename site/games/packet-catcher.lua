@@ -1,4 +1,4 @@
--- Packet Catcher: an example VibeBreak game.
+-- Packet Catcher: an example C-Cade game.
 -- Full API reference: docs/CUSTOM_GAMES.md
 
 game = {

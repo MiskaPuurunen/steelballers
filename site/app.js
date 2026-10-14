@@ -1,4 +1,4 @@
-/* VibeBreak disk shop. Plain JS, no build step. Data lives in catalog.json and games/*.lua. */
+/* C-Cade disk shop. Plain JS, no build step. Data lives in catalog.json and games/*.lua. */
 'use strict';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -180,15 +180,15 @@ function controlsTable(controls = []) {
 function installHelp(filename) {
   const p = el('p', { class: 'install' });
   p.innerHTML =
-    `To play it, open <strong>Custom games</strong> in the VibeBreak menu. Press <code>P</code>, paste the code and press <code>Ctrl+S</code>. ` +
-    `Or save <code>${escapeHtml(filename)}</code> to your games folder (<code>~/.config/vibebreak/games</code> on Linux, ` +
-    `<code>%APPDATA%\\vibebreak\\games</code> on Windows) and press <code>R</code> to reload.`;
+    `To play it, open <strong>Custom games</strong> in the C-Cade menu. Press <code>P</code>, paste the code and press <code>Ctrl+S</code>. ` +
+    `Or save <code>${escapeHtml(filename)}</code> to your games folder (<code>~/.config/c-cade/games</code> on Linux, ` +
+    `<code>%APPDATA%\\c-cade\\games</code> on Windows) and press <code>R</code> to reload.`;
   return p;
 }
 
 /* ------------------------------------------------------------ theme screen */
 
-// The VibeBreak logo, same letters as src/ui/layout.ts.
+// The C-Cade logo, same letters as src/ui/layout.ts.
 const LETTERS = {
   V: ['██╗   ██╗', '██║   ██║', '██║   ██║', '╚██╗ ██╔╝', ' ╚████╔╝ ', '  ╚═══╝  '],
   I: ['██╗', '██║', '██║', '██║', '██║', '╚═╝'],
@@ -264,7 +264,7 @@ function themeCard(theme) {
 
 function openTheme(theme) {
   const free = isFree(theme.price);
-  const command = `vibebreak theme ${theme.id}`;
+  const command = `c-cade theme ${theme.id}`;
   $('#detail-body').replaceChildren(
     closeButton(),
     el('div', { class: 'detail-head' },
@@ -280,7 +280,7 @@ function openTheme(theme) {
         el('div', { class: 'buy-row' },
           el('span', { class: free ? 'big-price free' : 'big-price', text: theme.price }),
         ),
-        el('p', { class: 'install', text: 'Run the command once and VibeBreak remembers it. You can also pick it from Themes in the menu, or use --theme for a single run.' }),
+        el('p', { class: 'install', text: 'Run the command once and C-Cade remembers it. You can also pick it from Themes in the menu, or use --theme for a single run.' }),
       ),
     ),
   );
@@ -316,7 +316,7 @@ function route() {
     if (name === current) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
-  document.title = current === 'themes' ? 'Themes, VibeBreak disk shop' : 'Games, VibeBreak disk shop';
+  document.title = current === 'themes' ? 'Themes, C-Cade disk shop' : 'Games, C-Cade disk shop';
 
   const dialog = $('#detail');
   const list = state.catalog?.[current] ?? [];

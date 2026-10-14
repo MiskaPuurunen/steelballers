@@ -3,7 +3,7 @@
     {
       "id": "packet-catcher",
       "title": "Packet Catcher",
-      "author": "vibebreak",
+      "author": "c-cade",
       "price": "Free",
       "disk": "blue",
       "file": "games/packet-catcher.lua",
@@ -28,7 +28,7 @@
     {
       "id": "ping",
       "title": "Ping",
-      "author": "vibebreak",
+      "author": "c-cade",
       "price": "0.99€",
       "disk": "red",
       "file": "games/ping.lua",
@@ -53,7 +53,7 @@
     {
       "id": "key-rain",
       "title": "Key Rain",
-      "author": "vibebreak",
+      "author": "c-cade",
       "price": "1.49€",
       "disk": "yellow",
       "file": "games/key-rain.lua",
@@ -78,7 +78,7 @@
     {
       "id": "coffee-break",
       "title": "Coffee Break",
-      "author": "vibebreak",
+      "author": "c-cade",
       "price": "0.99€",
       "disk": "black",
       "file": "games/coffee-break.lua",

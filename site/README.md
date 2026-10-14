@@ -1,6 +1,6 @@
-# VibeBreak disk shop
+# C-Cade disk shop
 
-A static site that lists custom games and themes for VibeBreak. Plain HTML, CSS and JS, no build step.
+A static site that lists custom games and themes for C-Cade. Plain HTML, CSS and JS, no build step.
 
 ## Run it locally
 
@@ -14,7 +14,7 @@ Then open http://localhost:8000.
 
 ## Add a game
 
-1. Put the script in `site/games/`, for example `site/games/my-game.lua`. Check that it loads in VibeBreak first (Custom games, then `F`).
+1. Put the script in `site/games/`, for example `site/games/my-game.lua`. Check that it loads in C-Cade first (Custom games, then `F`).
 2. Add an entry to the `games` list in `site/catalog.json`:
 
 ```json
@@ -42,7 +42,7 @@ Then open http://localhost:8000.
 
 ## Themes
 
-Themes are built into VibeBreak (`vibebreak/src/ui/themes.ts`), so the Themes tab only shows them and the command that switches to each one. If you add a theme to the app, add a matching entry to `themes` in `catalog.json` with its colours as hex values.
+Themes are built into C-Cade (`c-cade/src/ui/themes.ts`), so the Themes tab only shows them and the command that switches to each one. If you add a theme to the app, add a matching entry to `themes` in `catalog.json` with its colours as hex values.
 
 ## Prices
 
